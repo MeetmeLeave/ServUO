@@ -70,7 +70,7 @@ namespace Server.Engines.BulkOrders
             }
         }
 
-        public static BODContext GetContext(Mobile m)
+        public static BODContext GetContext(Mobile m, bool create = true)
         {
             BODContext context = null;
 
@@ -82,7 +82,7 @@ namespace Server.Engines.BulkOrders
                 {
                     context = Instance.BODPlayerData[pm];
                 }
-                else
+                else if (create)
                 {
                     Instance.BODPlayerData[pm] = context = new BODContext();
                 }
@@ -178,17 +178,40 @@ namespace Server.Engines.BulkOrders
 
                     if (tocache > 0)
                     {
-                        context.Entries[type].CachedDeeds = Math.Min(3, context.Entries[type].CachedDeeds + tocache);
+                        context.Entries[type].CachedDeeds = Math.Min(MaxCachedDeeds, context.Entries[type].CachedDeeds + tocache);
                     }
                 }
 
                 if (context.Entries[type].CachedDeeds > 0)
                 {
+                    if (context.Entries[type].CachedDeeds == MaxCachedDeeds)
+                        context.Entries[type].LastBulkOrder = DateTime.UtcNow - TimeSpan.FromHours(Delay * (MaxCachedDeeds));
+
+                    context.Entries[type].LastBulkOrder += TimeSpan.FromHours(Delay);
                     context.Entries[type].CachedDeeds--;
-                    context.Entries[type].LastBulkOrder = DateTime.UtcNow;
 
                     return true;
                 }
+                /*int cached = context.Entries[type].CachedDeeds;
+
+                if (cached > 0)
+                {
+                    if (cached == MaxCachedDeeds)
+                    {
+                        context.Entries[type].LastBulkOrder = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        //TimeSpan remainder = last - TimeSpan.FromHours(Delay);
+                        TimeSpan remainder = (DateTime.UtcNow - last) + TimeSpan.FromHours(Delay);
+
+                        context.Entries[type].LastBulkOrder = DateTime.UtcNow - remainder;
+                    }
+
+                    context.Entries[type].CachedDeeds--;
+
+                    return true;
+                }*/
             }
 
             return false;

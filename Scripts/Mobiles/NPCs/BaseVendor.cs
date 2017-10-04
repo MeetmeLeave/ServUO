@@ -34,14 +34,19 @@ namespace Server.Mobiles
 
 	public abstract class BaseVendor : BaseCreature, IVendor
 	{
+        public static bool UseVendorEconomy = Core.AOS && !Siege.SiegeShard;
+        public static int BuyItemChange = Config.Get("Vendors.BuyItemChange", 1000);
+        public static int SellItemChange = Config.Get("Vendors.SellItemChange", 1000);
+        public static int EconomyStockAmount = Config.Get("Vendors.EconomyStockAmount", 500);
+        public static TimeSpan DelayRestock = TimeSpan.FromMinutes(Config.Get("Vendors.RestockDelay", 60));
+        public static int MaxSell = Config.Get("Vendors.MaxSell", 500);
+
 		public static List<BaseVendor> AllVendors { get; private set; }
 
 		static BaseVendor()
 		{
 			AllVendors = new List<BaseVendor>(0x4000);
 		}
-
-		private const int MaxSell = 500;
 
 		protected abstract List<SBInfo> SBInfos { get; }
 
@@ -59,7 +64,7 @@ namespace Server.Mobiles
         public override bool UseSmartAI { get { return true; } }
 
 		public virtual bool IsActiveVendor { get { return true; } }
-		public virtual bool IsActiveBuyer { get { return IsActiveVendor; } } // response to vendor SELL
+		public virtual bool IsActiveBuyer { get { return IsActiveVendor && !Siege.SiegeShard; } } // response to vendor SELL
 		public virtual bool IsActiveSeller { get { return IsActiveVendor; } } // repsonse to vendor BUY
 		public virtual bool HasHonestyDiscount { get { return true; } }
 
@@ -301,7 +306,7 @@ namespace Server.Mobiles
 			pack.Layer = Layer.ShopBuy;
 			pack.Movable = false;
 			pack.Visible = false;
-			AddItem(pack);
+            AddItem(pack);
 
 			pack = new Backpack();
 			pack.Layer = Layer.ShopResale;
@@ -336,7 +341,7 @@ namespace Server.Mobiles
 
 		public DateTime LastRestock { get { return m_LastRestock; } set { m_LastRestock = value; } }
 
-		public virtual TimeSpan RestockDelay { get { return TimeSpan.FromHours(1); } }
+        public virtual TimeSpan RestockDelay { get { return DelayRestock; } }
 
 		public Container BuyPack
 		{
@@ -735,29 +740,29 @@ namespace Server.Mobiles
 			switch (Utility.Random(3))
 			{
 				case 0:
-					AddItem(new FancyShirt(GetRandomHue()));
+					SetWearable(new FancyShirt(GetRandomHue()));
 					break;
 				case 1:
-					AddItem(new Doublet(GetRandomHue()));
+					SetWearable(new Doublet(GetRandomHue()));
 					break;
 				case 2:
-					AddItem(new Shirt(GetRandomHue()));
+					SetWearable(new Shirt(GetRandomHue()));
 					break;
 			}
 
 			switch (ShoeType)
 			{
 				case VendorShoeType.Shoes:
-					AddItem(new Shoes(GetShoeHue()));
+					SetWearable(new Shoes(GetShoeHue()));
 					break;
 				case VendorShoeType.Boots:
-					AddItem(new Boots(GetShoeHue()));
+					SetWearable(new Boots(GetShoeHue()));
 					break;
 				case VendorShoeType.Sandals:
-					AddItem(new Sandals(GetShoeHue()));
+					SetWearable(new Sandals(GetShoeHue()));
 					break;
 				case VendorShoeType.ThighBoots:
-					AddItem(new ThighBoots(GetShoeHue()));
+					SetWearable(new ThighBoots(GetShoeHue()));
 					break;
 			}
 
@@ -776,16 +781,16 @@ namespace Server.Mobiles
 				switch (Utility.Random(6))
 				{
 					case 0:
-						AddItem(new ShortPants(GetRandomHue()));
+						SetWearable(new ShortPants(GetRandomHue()));
 						break;
 					case 1:
 					case 2:
-						AddItem(new Kilt(GetRandomHue()));
+						SetWearable(new Kilt(GetRandomHue()));
 						break;
 					case 3:
 					case 4:
 					case 5:
-						AddItem(new Skirt(GetRandomHue()));
+						SetWearable(new Skirt(GetRandomHue()));
 						break;
 				}
 			}
@@ -794,15 +799,16 @@ namespace Server.Mobiles
 				switch (Utility.Random(2))
 				{
 					case 0:
-						AddItem(new LongPants(GetRandomHue()));
+						SetWearable(new LongPants(GetRandomHue()));
 						break;
 					case 1:
-						AddItem(new ShortPants(GetRandomHue()));
+						SetWearable(new ShortPants(GetRandomHue()));
 						break;
 				}
 			}
 
-			PackGold(100, 200);
+            if(!Siege.SiegeShard)
+			    PackGold(100, 200);
 		}
 
 		#region SA
@@ -823,13 +829,13 @@ namespace Server.Mobiles
 				switch (Utility.Random(2))
 				{
 					case 0:
-						AddItem(new FemaleGargishClothLegs(GetRandomHue()));
-						AddItem(new FemaleGargishClothKilt(GetRandomHue()));
-						AddItem(new FemaleGargishClothChest(GetRandomHue()));
+						SetWearable(new FemaleGargishClothLegs(GetRandomHue()));
+						SetWearable(new FemaleGargishClothKilt(GetRandomHue()));
+						SetWearable(new FemaleGargishClothChest(GetRandomHue()));
 						break;
 					case 1:
-						AddItem(new FemaleGargishClothKilt(GetRandomHue()));
-						AddItem(new FemaleGargishClothChest(GetRandomHue()));
+						SetWearable(new FemaleGargishClothKilt(GetRandomHue()));
+						SetWearable(new FemaleGargishClothChest(GetRandomHue()));
 						break;
 				}
 			}
@@ -838,19 +844,35 @@ namespace Server.Mobiles
 				switch (Utility.Random(2))
 				{
 					case 0:
-						AddItem(new MaleGargishClothLegs(GetRandomHue()));
-						AddItem(new MaleGargishClothKilt(GetRandomHue()));
-						AddItem(new MaleGargishClothChest(GetRandomHue()));
+						SetWearable(new MaleGargishClothLegs(GetRandomHue()));
+						SetWearable(new MaleGargishClothKilt(GetRandomHue()));
+						SetWearable(new MaleGargishClothChest(GetRandomHue()));
 						break;
 					case 1:
-						AddItem(new MaleGargishClothKilt(GetRandomHue()));
-						AddItem(new MaleGargishClothChest(GetRandomHue()));
+						SetWearable(new MaleGargishClothKilt(GetRandomHue()));
+						SetWearable(new MaleGargishClothChest(GetRandomHue()));
 						break;
 				}
 			}
-			PackGold(100, 200);
+
+            if(!Siege.SiegeShard)
+			    PackGold(100, 200);
 		}
 		#endregion
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool ForceRestock
+        {
+            get { return false; }
+            set
+            {
+                if (value)
+                {
+                    Restock();
+                    Say("Restocked!");
+                }
+            }
+        }
 
 		public virtual void Restock()
 		{
@@ -914,6 +936,11 @@ namespace Server.Mobiles
 				GenericBuyInfo gbi = (GenericBuyInfo)buyItem;
 				IEntity disp = gbi.GetDisplayEntity();
 
+                if (Siege.SiegeShard && !Siege.VendorCanSell(gbi.Type))
+                {
+                    continue;
+                }
+
 				list.Add(
 					new BuyItemState(
 						buyItem.Name,
@@ -961,6 +988,11 @@ namespace Server.Mobiles
 			{
 				Item item = playerItems[i];
 
+                if (Siege.SiegeShard && !Siege.VendorCanSell(item.GetType()))
+                {
+                    continue;
+                }
+
 				int price = 0;
 				string name = null;
 
@@ -968,7 +1000,7 @@ namespace Server.Mobiles
 				{
 					if (ssi.IsSellable(item))
 					{
-						price = ssi.GetBuyPriceFor(item);
+						price = ssi.GetBuyPriceFor(item, this);
 						name = ssi.GetNameFor(item);
 						break;
 					}
@@ -1049,7 +1081,7 @@ namespace Server.Mobiles
 				pack.Layer = Layer.ShopBuy;
 				pack.Movable = false;
 				pack.Visible = false;
-				AddItem(pack);
+				SetWearable(pack);
 			}
 
 			from.Send(new EquipUpdate(pack));
@@ -1069,7 +1101,7 @@ namespace Server.Mobiles
 				pack.Layer = Layer.ShopResale;
 				pack.Movable = false;
 				pack.Visible = false;
-				AddItem(pack);
+				SetWearable(pack);
 			}
 
 			from.Send(new EquipUpdate(pack));
@@ -1114,7 +1146,7 @@ namespace Server.Mobiles
 
 						if (item.IsStandardLoot() && item.Movable && ssi.IsSellable(item))
 						{
-							table[item] = new SellItemState(item, ssi.GetSellPriceFor(item), ssi.GetNameFor(item));
+							table[item] = new SellItemState(item, ssi.GetSellPriceFor(item, this), ssi.GetNameFor(item));
 						}
 					}
 				}
@@ -1279,13 +1311,14 @@ namespace Server.Mobiles
 
             this.SayTo(m, 1152295, 0x3B2); // So you want to do a little business under the table?
             m.SendLocalizedMessage(1152296); // Target a bulk order deed to show to the shopkeeper.
+
             m.BeginTarget(-1, false, Server.Targeting.TargetFlags.None, (from, targeted) =>
                 {
                     IBOD bod = targeted as IBOD;
 
                     if (bod is Item && ((Item)bod).IsChildOf(from.Backpack))
                     {
-                        if(BulkOrderSystem.CanExchangeBOD(from, this, bod, -1))
+                        if (BulkOrderSystem.CanExchangeBOD(from, this, bod, -1))
                         {
                             int amount = BulkOrderSystem.GetBribe(bod);
                             amount *= BribeMultiplier;
@@ -1308,7 +1341,7 @@ namespace Server.Mobiles
                             // If you help me out, I'll help you out. I can replace that bulk order with a better one, but it's gonna cost you ~1_amt~ gold coin. Payment is due immediately. Just hand me the order and I'll pull the old switcheroo.
                         }
                     }
-                    else if(bod == null)
+                    else if (bod == null)
                     {
                         this.SayTo(from, 1152297, 0x3B2); // That is not a bulk order deed.
                     }
@@ -1327,6 +1360,11 @@ namespace Server.Mobiles
             }
 
             this.SayTo(m, 1152303, 0x3B2); // You'll find this one much more to your liking. It's been a pleasure, and I look forward to you greasing my palm again very soon.
+
+            if (Bribes.ContainsKey(m))
+            {
+                Bribes.Remove(m);
+            }
 
             BribeMultiplier++;
             NextMultiplierDecay = DateTime.UtcNow + TimeSpan.FromDays(Utility.RandomMinMax(25, 30));
@@ -1407,6 +1445,8 @@ namespace Server.Mobiles
 			{
 				Item item = (Item)o;
 
+                bii.OnBought(this, amount);
+
 				if (item.Stackable)
 				{
 					item.Amount = amount;
@@ -1444,6 +1484,8 @@ namespace Server.Mobiles
 			else if (o is Mobile)
 			{
 				Mobile m = (Mobile)o;
+
+                bii.OnBought(this, amount);
 
 				m.Direction = (Direction)Utility.Random(8);
 				m.MoveToWorld(buyer.Location, buyer.Map);
@@ -1540,7 +1582,7 @@ namespace Server.Mobiles
 							{
 								if (ssi.IsResellable(item))
 								{
-									totalCost += (double)ssi.GetBuyPriceFor(item) * amount;
+									totalCost += (double)ssi.GetBuyPriceFor(item, this) * amount;
 									validBuy.Add(buy);
 									break;
 								}
@@ -1987,14 +2029,16 @@ namespace Server.Mobiles
 						{
 							bool found = false;
 
-							foreach (IBuyItemInfo bii in buyInfo)
+							foreach (var bii in buyInfo)
 							{
 								if (bii.Restock(resp.Item, amount))
 								{
+                                    bii.OnSold(this, amount);
+
 									resp.Item.Consume(amount);
 									found = true;
 
-									break;
+                                    break;
 								}
 							}
 
@@ -2036,7 +2080,7 @@ namespace Server.Mobiles
 							}
 						}
 
-						GiveGold += ssi.GetSellPriceFor(resp.Item) * amount;
+						GiveGold += ssi.GetSellPriceFor(resp.Item, this) * amount;
 						break;
 					}
 				}
@@ -2078,7 +2122,7 @@ namespace Server.Mobiles
 		{
 			base.Serialize(writer);
 
-			writer.Write(2); // version
+			writer.Write(3); // version
 
             writer.Write(BribeMultiplier);
             writer.Write(NextMultiplierDecay);
@@ -2097,6 +2141,8 @@ namespace Server.Mobiles
 
 					int maxAmount = gbi.MaxAmount;
 					int doubled = 0;
+                    int bought = gbi.TotalBought;
+                    int sold = gbi.TotalSold;
 
 					switch (maxAmount)
 					{
@@ -2120,10 +2166,12 @@ namespace Server.Mobiles
 							break;
 					}
 
-					if (doubled > 0)
+					if (doubled > 0 || bought > 0 || sold > 0)
 					{
 						writer.WriteEncodedInt(1 + ((j * sbInfos.Count) + i));
 						writer.WriteEncodedInt(doubled);
+                        writer.WriteEncodedInt(bought);
+                        writer.WriteEncodedInt(sold);
 					}
 				}
 			}
@@ -2154,6 +2202,7 @@ namespace Server.Mobiles
 
 			switch (version)
 			{
+                case 3:
                 case 2:
                     BribeMultiplier = reader.ReadInt();
                     NextMultiplierDecay = reader.ReadDateTime();
@@ -2166,6 +2215,14 @@ namespace Server.Mobiles
 						while ((index = reader.ReadEncodedInt()) > 0)
 						{
 							int doubled = reader.ReadEncodedInt();
+                            int bought = 0;
+                            int sold = 0;
+
+                            if (version >= 3)
+                            {
+                                bought = reader.ReadEncodedInt();
+                                sold = reader.ReadEncodedInt();
+                            }
 
 							if (sbInfos != null)
 							{
@@ -2186,6 +2243,8 @@ namespace Server.Mobiles
 
 										switch (doubled)
 										{
+                                            case 0:
+                                                break;
 											case 1:
 												amount = 40;
 												break;
@@ -2206,7 +2265,17 @@ namespace Server.Mobiles
 												break;
 										}
 
-										gbi.Amount = gbi.MaxAmount = amount;
+                                        if (version == 2 && gbi.Stackable)
+                                        {
+                                            gbi.Amount = gbi.MaxAmount = BaseVendor.EconomyStockAmount;
+                                        }
+                                        else
+                                        {
+                                            gbi.Amount = gbi.MaxAmount = amount;
+                                        }
+
+                                        gbi.TotalBought = bought;
+                                        gbi.TotalSold = sold;
 									}
 								}
 							}
@@ -2315,10 +2384,12 @@ namespace Server
 		string GetNameFor(Item item);
 
 		//get price for an item which the player is selling
-		int GetSellPriceFor(Item item);
+        int GetSellPriceFor(Item item);
+		int GetSellPriceFor(Item item, BaseVendor vendor);
 
 		//get price for an item which the player is buying
-		int GetBuyPriceFor(Item item);
+        int GetBuyPriceFor(Item item);
+		int GetBuyPriceFor(Item item, BaseVendor vendor);
 
 		//can we sell this item to this vendor?
 		bool IsSellable(Item item);
@@ -2338,6 +2409,13 @@ namespace Server
 		int ControlSlots { get; }
 
 		int PriceScalar { get; set; }
+
+        bool Stackable { get; set; }
+        int TotalBought { get; set; }
+        int TotalSold { get; set; }
+
+        void OnBought(BaseVendor vendor, int amount);
+        void OnSold(BaseVendor vendor, int amount);
 
 		//display price of the item
 		int Price { get; }

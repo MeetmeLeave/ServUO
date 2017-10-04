@@ -116,11 +116,6 @@ namespace Server.Spells.SkillMasteries
             }
         }
 
-        public override void SendCastEffect()
-        {
-            Caster.FixedEffect(0x37C4, 5, (int)(GetCastDelay().TotalSeconds * 28), 4, 2);
-        }
-
 		public override void GetCastSkills( out double min, out double max )
 		{
             min = RequiredSkill;
@@ -151,6 +146,11 @@ namespace Server.Spells.SkillMasteries
 		{
             Caster.RevealingAction();
             int upkeep = ScaleUpkeep();
+
+            if (0.10 > Utility.RandomDouble())
+            {
+                NegativeAttributes.OnCombatAction(Caster);
+            }
 
             if ((Caster is PlayerMobile && Caster.NetState == null) || Expires < DateTime.UtcNow)
                 Expire();
@@ -253,7 +253,11 @@ namespace Server.Spells.SkillMasteries
         {
         }
 
-        public virtual void OnDamaged(Mobile attacker, int damage)
+        public virtual void OnDamaged(Mobile attacker, Mobile victim, int damage)
+        {
+        }
+
+        public virtual void OnTargetDamaged(Mobile attacker, Mobile victim, int damage)
         {
         }
 
@@ -643,28 +647,35 @@ namespace Server.Spells.SkillMasteries
         /// <param name="victim"></param>
         /// <param name="damager"></param>
         /// <param name="damage"></param>
-		public static void OnCasterDamaged(Mobile victim, Mobile damager, ref int damage)
+		public static void OnDamaged(Mobile victim, Mobile damager, ref int damage)
 		{
 			if(victim == null)
 				return;
 
             CheckTable(victim);
 
-            if (m_Table.ContainsKey(victim))
+            foreach (SkillMasterySpell sp in EnumerateSpells(victim))
             {
-                foreach (SkillMasterySpell sp in EnumerateSpells(victim))
-                {
-                    if (sp.DamageCanDisrupt && damage > sp.DamageThreshold)
-                        sp.Expire(true);
+                if (sp.DamageCanDisrupt && damage > sp.DamageThreshold)
+                    sp.Expire(true);
 
-                    sp.OnDamaged(damager, damage);
-                }
+                sp.OnDamaged(damager, victim, damage);
+            }
+
+            foreach (SkillMasterySpell sp in GetSpells(s => s.Target == victim))
+            {
+                sp.OnTargetDamaged(damager, victim, damage);
             }
 
             SkillMasteryMove move = SpecialMove.GetCurrentMove(victim) as SkillMasteryMove;
 
             if (move != null)
                 move.OnDamaged(damager, victim, damage);
+
+            SkillMasterySpell spell = SkillMasterySpell.GetSpellForParty(victim, typeof(PerseveranceSpell));
+
+            if (spell != null)
+                spell.AbsorbDamage(ref damage);
 
             CombatTrainingSpell.CheckDamage(damager, victim, ref damage);
 		}
@@ -692,8 +703,8 @@ namespace Server.Spells.SkillMasteries
             if (move != null)
                 move.OnGotHit(attacker, defender, ref damage);
 
-            /*if(attacker is BaseCreature || defender is BaseCreature)
-                CombatTrainingSpell.OnCreatureHit(attacker, defender, ref damage);*/
+            if(attacker is BaseCreature || defender is BaseCreature)
+                CombatTrainingSpell.OnCreatureHit(attacker, defender, ref damage);
         }
 
         /// <summary>

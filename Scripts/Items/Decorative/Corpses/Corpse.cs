@@ -633,6 +633,14 @@ namespace Server.Items
 			BeginDecay(m_DefaultDecayTime);
 
 			DevourCorpse();
+
+            if (owner is PlayerMobile)
+            {
+                if (PlayerCorpses == null)
+                    PlayerCorpses = new Dictionary<Corpse, int>();
+
+                PlayerCorpses[this] = 0;
+            }
 		}
 
 		public Corpse(Serial serial)
@@ -886,6 +894,14 @@ namespace Server.Items
 						break;
 					}
 			}
+
+            if (m_Owner is PlayerMobile)
+            {
+                if (PlayerCorpses == null)
+                    PlayerCorpses = new Dictionary<Corpse, int>();
+
+                PlayerCorpses[this] = 0;
+            }
 		}
 
 		public bool DevourCorpse()
@@ -1381,7 +1397,7 @@ namespace Server.Items
 			}
 		}
 
-		public void Carve(Mobile from, Item item)
+		public bool Carve(Mobile from, Item item)
 		{
 			if (IsCriminalAction(from) && Map != null && (Map.Rules & MapRules.HarmfulRestrictions) != 0)
 			{
@@ -1394,7 +1410,7 @@ namespace Server.Items
 					from.SendLocalizedMessage(1010049); // You may not loot this corpse.
 				}
 
-				return;
+				return false;
 			}
 
 			Mobile dead = m_Owner;
@@ -1435,6 +1451,23 @@ namespace Server.Items
 			{
 				from.SendLocalizedMessage(500485); // You see nothing useful to carve from the corpse.
 			}
+
+            return true;
 		}
+
+        public override void Delete()
+        {
+            base.Delete();
+
+            if (PlayerCorpses != null && PlayerCorpses.ContainsKey(this))
+            {
+                PlayerCorpses.Remove(this);
+
+                if (PlayerCorpses.Count == 0)
+                    PlayerCorpses = null;
+            }
+        }
+
+        public static Dictionary<Corpse, int> PlayerCorpses { get; set; }
 	}
 }

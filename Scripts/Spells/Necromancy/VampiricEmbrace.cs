@@ -43,9 +43,11 @@ namespace Server.Spells.Necromancy
             get
             {
                 if (Caster.Race == Race.Gargoyle)
+                {
                     return Caster.Female ? 667 : 666;
-                else
-                    return Caster.Body;
+                }
+
+                return Caster.Female ? Caster.Race.FemaleBody : Caster.Race.MaleBody;
             }
         }
         public override int Hue
@@ -82,8 +84,11 @@ namespace Server.Spells.Necromancy
             Effects.PlaySound(m.Location, m.Map, 0x4B1);
 			
 			BuffInfo.AddBuff(Caster, new BuffInfo(BuffIcon.VampiricEmbrace, 1028812));
+
 			if (Caster.Skills.Necromancy.Value > 99.0)
 				BuffInfo.AddBuff(Caster, new BuffInfo(BuffIcon.PoisonImmunity, 1153785));
+
+            m.ResetStatTimers();
 		}
 
 		public override void RemoveEffect(Mobile m)

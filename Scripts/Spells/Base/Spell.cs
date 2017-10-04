@@ -15,8 +15,12 @@ using Server.Mobiles;
 using Server.Network;
 using Server.Spells.Bushido;
 using Server.Spells.Necromancy;
+using Server.Spells.Chivalry;
 using Server.Spells.Ninjitsu;
+using Server.Spells.First;
 using Server.Spells.Second;
+using Server.Spells.Third;
+using Server.Spells.Fourth;
 using Server.Spells.Spellweaving;
 using Server.Targeting;
 using Server.Spells.SkillMasteries;
@@ -56,6 +60,9 @@ namespace Server.Spells
 		public virtual bool ShowHandMovement { get { return true; } }
 
 		public virtual bool DelayedDamage { get { return false; } }
+        public virtual Type[] DelayDamageFamily { get { return null; } }
+        // DelayDamageFamily can define spells so they don't stack, even though they are different spells
+        // Right now, magic arrow and nether bolt are the only ones that have this functionality
 
 		public virtual bool DelayedDamageStacking { get { return true; } }
 		//In reality, it's ANY delayed Damage spell Post-AoS that can't stack, but, only 
@@ -100,8 +107,18 @@ namespace Server.Spells
 
 			if (!m_ContextTable.TryGetValue(GetType(), out contexts))
 			{
-				contexts = new DelayedDamageContextWrapper();
-				m_ContextTable.Add(GetType(), contexts);
+                contexts = new DelayedDamageContextWrapper();
+                Type type = GetType();
+
+                m_ContextTable.Add(type, contexts);
+
+                if (DelayDamageFamily != null)
+                {
+                    foreach (var familyType in DelayDamageFamily)
+                    {
+                        m_ContextTable.Add(familyType, contexts);
+                    }
+                }
 			}
 
 			contexts.Add(d, t);
@@ -110,13 +127,25 @@ namespace Server.Spells
 		public void RemoveDelayedDamageContext(IDamageable d)
 		{
 			DelayedDamageContextWrapper contexts;
+            Type type = GetType();
 
-			if (!m_ContextTable.TryGetValue(GetType(), out contexts))
+            if (!m_ContextTable.TryGetValue(type, out contexts))
 			{
 				return;
 			}
 
 			contexts.Remove(d);
+
+            if (DelayDamageFamily != null)
+            {
+                foreach (var t in DelayDamageFamily)
+                {
+                    if (m_ContextTable.TryGetValue(t, out contexts))
+                    {
+                        contexts.Remove(d);
+                    }
+                }
+            }
 		}
 
         public void HarmfulSpell(IDamageable d)
@@ -129,6 +158,11 @@ namespace Server.Spells
             {
                 ((IDamageableItem)d).OnHarmfulSpell(m_Caster);
             }
+
+            NegativeAttributes.OnCombatAction(Caster);
+
+            if (d is Mobile && (Mobile)d != m_Caster)
+                NegativeAttributes.OnCombatAction((Mobile)d);
 		}
 
 		public Spell(Mobile caster, Item scroll, SpellInfo info)
@@ -182,13 +216,6 @@ namespace Server.Spells
 			damage = AOS.Scale(damage, evalScale);
 
 			damage = AOS.Scale(damage, (int)(scalar * 100));
-
-            #region Skill Mastery
-            SkillMasterySpell spell = SkillMasterySpell.GetHarmfulSpell(Caster, typeof(TribulationSpell));
-
-            if (spell != null)
-                spell.AbsorbDamage(ref damage);
-            #endregion
 
 			return damage / 100;
 		}
@@ -275,6 +302,11 @@ namespace Server.Spells
 			FinishSequence();
 		}
 
+        /// <summary>
+        /// Pre-ML code where mobile can change directions, but doesn't move
+        /// </summary>
+        /// <param name="d"></param>
+        /// <returns></returns>
 		public virtual bool OnCasterMoving(Direction d)
 		{
             if (IsCasting && BlocksMovement && (!(m_Caster is BaseCreature) || ((BaseCreature)m_Caster).FreezeOnCast))
@@ -288,6 +320,21 @@ namespace Server.Spells
 
 			return true;
 		}
+
+        /// <summary>
+        /// Post ML code where player is frozen in place while casting.
+        /// </summary>
+        /// <param name="caster"></param>
+        /// <returns></returns>
+        public virtual bool CheckMovement(Mobile caster)
+        {
+            if (IsCasting && BlocksMovement && (!(m_Caster is BaseCreature) || ((BaseCreature)m_Caster).FreezeOnCast))
+            {
+                return false;
+            }
+
+            return true;
+        }
 
 		public virtual bool OnCasterEquiping(Item item)
 		{
@@ -544,6 +591,7 @@ namespace Server.Spells
 
 				m_State = SpellState.None;
 				m_Caster.Spell = null;
+                Caster.Delta(MobileDelta.Flags);
 
 				OnDisturb(type, true);
 
@@ -573,6 +621,7 @@ namespace Server.Spells
 
 				m_State = SpellState.None;
 				m_Caster.Spell = null;
+                Caster.Delta(MobileDelta.Flags);
 
 				OnDisturb(type, false);
 
@@ -730,6 +779,8 @@ namespace Server.Spells
 				{
 					m_State = SpellState.Casting;
 					m_Caster.Spell = this;
+
+                    Caster.Delta(MobileDelta.Flags);
 
 					if (!(m_Scroll is BaseWand) && RevealOnCast)
 					{
@@ -891,6 +942,11 @@ namespace Server.Spells
 				scalar = 1.0;
 			}
 
+            if (Mysticism.PurgeMagicSpell.IsUnderCurseEffects(Caster))
+            {
+                scalar += .5;
+            }
+
 			// Lower Mana Cost = 40%
 			int lmc = AosAttributes.GetValue(m_Caster, AosAttribute.LowerManaCost);
 
@@ -978,7 +1034,7 @@ namespace Server.Spells
 			// Paladins with magery of 70.0 or above are subject to a faster casting cap of 2 
 			int fcMax = 4;
 
-			if (CastSkill == SkillName.Magery || CastSkill == SkillName.Necromancy ||
+			if (CastSkill == SkillName.Magery || CastSkill == SkillName.Necromancy || CastSkill == SkillName.Mysticism ||
                 (CastSkill == SkillName.Chivalry && (m_Caster.Skills[SkillName.Magery].Value >= 70.0 || m_Caster.Skills[SkillName.Mysticism].Value >= 70.0)))
 			{
 				fcMax = 2;
@@ -1021,7 +1077,14 @@ namespace Server.Spells
 
 		public virtual void FinishSequence()
 		{
+            SpellState oldState = m_State;
+
 			m_State = SpellState.None;
+
+            if (oldState == SpellState.Casting)
+            {
+                Caster.Delta(MobileDelta.Flags);
+            }
 
 			if (m_Caster.Spell == this)
 			{
@@ -1152,9 +1215,13 @@ namespace Server.Spells
 				m_Caster.SendLocalizedMessage(501857); // This spell won't work on that!
 				return false;
 			}
-			else if (Caster.CanBeBeneficial(target, true, allowDead) && CheckSequence())
+            else if (Caster.CanBeBeneficial(target, true, allowDead) && CheckSequence())
 			{
-				Caster.DoBeneficial(target);
+                if (ValidateBeneficial(target))
+                {
+                    Caster.DoBeneficial(target);
+                }
+
 				return true;
 			}
 			else
@@ -1181,6 +1248,24 @@ namespace Server.Spells
 			}
 		}
 
+        public bool ValidateBeneficial(Mobile target)
+        {
+            if (target == null)
+                return true;
+
+            if (this is HealSpell || this is GreaterHealSpell || this is CloseWoundsSpell)
+            {
+                return target.Hits < target.HitsMax;
+            }
+
+            if (this is CureSpell || this is CleanseByFireSpell)
+            {
+                return target.Poisoned;
+            }
+
+            return true;
+        }
+
 		private class AnimTimer : Timer
 		{
 			private readonly Spell m_Spell;
@@ -1201,17 +1286,24 @@ namespace Server.Spells
 					return;
 				}
 
-				if (!m_Spell.Caster.Mounted && m_Spell.m_Info.Action >= 0)
-				{
-					if (m_Spell.Caster.Body.IsHuman)
-					{
-						m_Spell.Caster.Animate(m_Spell.m_Info.Action, 7, 1, true, false, 0);
-					}
-					else if (m_Spell.Caster.Player && m_Spell.Caster.Body.IsMonster)
-					{
-						m_Spell.Caster.Animate(12, 7, 1, true, false, 0);
-					}
-				}
+                if (!m_Spell.Caster.Mounted && m_Spell.m_Info.Action >= 0)
+                {
+                    if (Core.SA)
+                    {
+                        m_Spell.Caster.Animate(AnimationType.Spell, 0);
+                    }
+                    else
+                    {
+                        if (m_Spell.Caster.Body.IsHuman)
+                        {
+                            m_Spell.Caster.Animate(m_Spell.m_Info.Action, 7, 1, true, false, 0);
+                        }
+                        else if (m_Spell.Caster.Player && m_Spell.Caster.Body.IsMonster)
+                        {
+                            m_Spell.Caster.Animate(12, 7, 1, true, false, 0);
+                        }
+                    }
+                }
 
 				if (!Running)
 				{
@@ -1243,12 +1335,15 @@ namespace Server.Spells
 					m_Spell.m_State = SpellState.Sequencing;
 					m_Spell.m_CastTimer = null;
 					m_Spell.m_Caster.OnSpellCast(m_Spell);
+
+                    m_Spell.Caster.Delta(MobileDelta.Flags);
+
 					if (m_Spell.m_Caster.Region != null)
 					{
 						m_Spell.m_Caster.Region.OnSpellCast(m_Spell.m_Caster, m_Spell);
 					}
+
 					m_Spell.m_Caster.NextSpellTime = Core.TickCount + (int)m_Spell.GetCastRecovery().TotalMilliseconds;
-						// Spell.NextSpellDelay;
 
 					Target originalTarget = m_Spell.m_Caster.Target;
 

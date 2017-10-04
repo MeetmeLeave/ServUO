@@ -80,6 +80,58 @@ namespace Server.Items
             }
         }
 
+        public static void PrivateOverheadMessage(this Item item, MessageType type, int hue, bool ascii, string text, NetState state)
+        {
+            if (item.Map != null && state != null)
+            {
+                Point3D worldLoc = item.GetWorldLocation();
+
+                Mobile m = state.Mobile;
+
+                if (m != null && m.CanSee(item) && m.InRange(worldLoc, item.GetUpdateRange(m)))
+                {
+                    if (ascii)
+                    {
+                        state.Send(new AsciiMessage(item.Serial, item.ItemID, type, hue, 3, item.Name, text));
+                    }
+                    else
+                    {
+                        state.Send(new UnicodeMessage(item.Serial, item.ItemID, type, hue, 3, m.Language, item.Name, text));
+                    }
+                }
+            }
+        }
+
+        public static void SendLocalizedMessage(this Item item, int number, string args)
+        {
+            if (item == null)
+                return;
+
+            IPooledEnumerable eable = item.Map.GetClientsInRange(item.Location, 12);
+
+            foreach (NetState ns in eable)
+            {
+                ns.Send(new MessageLocalized(item.Serial, item.ItemID, MessageType.Regular, 0x3B2, 3, number, "", args));
+            }
+            
+            eable.Free();
+        }
+
+        public static void SendLocalizedMessage(this Item item, MessageType type, int number, AffixType affixType, string affix, string args)
+        {
+            if (item == null)
+                return;
+
+            IPooledEnumerable eable = item.Map.GetClientsInRange(item.Location, 12);
+
+            foreach (NetState ns in eable)
+            {
+                ns.Send(new MessageLocalizedAffix(item.Serial, item.ItemID, type, 0x3B2, 3, number, "", affixType, affix, args));
+            }
+            
+            eable.Free();
+        }
+
         public static bool InLOS(this Item item, Point3D target)
         {
             if (item.Deleted || item.Map == null || item.Parent != null)
@@ -107,6 +159,11 @@ namespace Server.Mobiles
         public static void SayTo(this Mobile mobile, Mobile to, string text, int hue, bool ascii = false)
         {
             mobile.PrivateOverheadMessage(MessageType.Regular, hue, ascii, text, to.NetState);
+        }
+
+        public static void PrivateOverheadMessage(this Mobile mobile, MessageType type, int hue, int number, AffixType affixType, string affix, string args, NetState state)
+        {
+            state.Send(new MessageLocalizedAffix(mobile.Serial, mobile.Body, type, hue, 3, number, mobile.Name, affixType, affix, args));
         }
     }
 }
@@ -136,7 +193,7 @@ namespace Server
 
         public static List<Item> GetItems(this Region region)
         {
-            if (region == null)
+            if (region == null || region.Sectors == null)
                 return null;
 
             List<Item> list = new List<Item>();
@@ -178,7 +235,7 @@ namespace Server
 
         public static int GetItemCount(this Region region)
         {
-            if (region == null)
+            if (region == null || region.Sectors == null)
             {
                 return 0;
             }
@@ -195,7 +252,7 @@ namespace Server
 
         public static int GetItemCount(this Region region, Func<Item, bool> predicate)
         {
-            if (region == null)
+            if (region == null || region.Sectors == null)
             {
                 return 0;
             }
@@ -212,7 +269,7 @@ namespace Server
 
         public static List<BaseMulti> GetMultis(this Region region)
         {
-            if (region == null)
+            if (region == null || region.Sectors == null)
             {
                 return null;
             }

@@ -15,6 +15,8 @@ using Server.Spells.Spellweaving;
 using Server.SkillHandlers;
 using Server.Engines.CityLoyalty;
 using Server.Spells.SkillMasteries;
+using System.Linq;
+using Server.Misc;
 
 namespace Server
 {
@@ -257,29 +259,16 @@ namespace Server
 
             if (fire > 0 && totalDamage > 0)
                 SwarmContext.CheckRemove(m);
-
-            if (totalDamage > 0)
-            {
-                Spells.Mysticism.SleepSpell.OnDamage(m);
-            }
-            #endregion
-
-            #region Skill Mastery Spells
-            SkillMasterySpell spell = SkillMasterySpell.GetSpellForParty(m, typeof(PerseveranceSpell));
-
-            if (spell != null)
-                spell.AbsorbDamage(ref totalDamage);
-
-            ManaShieldSpell.CheckManaShield(m, ref totalDamage);
-            SkillMasterySpell.OnCasterDamaged(m, from, ref totalDamage);
             #endregion
 
             if (keepAlive && totalDamage > m.Hits)
                 totalDamage = m.Hits;
 
+            SpiritualityVirtue.GetDamageReduction(m, ref totalDamage);
+
             if (from != null && !from.Deleted && from.Alive)
             {
-                int reflectPhys = AosAttributes.GetValue(m, AosAttribute.ReflectPhysical);
+                int reflectPhys = Math.Min(105, AosAttributes.GetValue(m, AosAttribute.ReflectPhysical));
 
                 if (reflectPhys != 0)
                 {
@@ -302,6 +291,11 @@ namespace Server
 
             m.Damage(totalDamage, from, true, false);
 
+            #region Skill Mastery Spells
+            ManaShieldSpell.CheckManaShield(m, ref totalDamage);
+            SkillMasterySpell.OnDamaged(m, from, ref totalDamage);
+            #endregion
+
             #region Stygian Abyss
             if (m.Spell != null)
                 ((Spell)m.Spell).CheckCasterDisruption(true, phys, fire, cold, pois, nrgy);
@@ -310,6 +304,9 @@ namespace Server
 
             if (ManaPhasingOrb.IsInManaPhase(m))
                 ManaPhasingOrb.RemoveFromTable(m);
+
+            Spells.Mysticism.SleepSpell.OnDamage(m);
+            Spells.Mysticism.PurgeMagicSpell.OnMobileDoDamage(from);
             #endregion
 
             return totalDamage;
@@ -326,11 +323,11 @@ namespace Server
             return (input * percent) / 100;
         }
 
-		public static int GetStatus( Mobile from, int index )
+        #region AOS Status Bar
+        public static int GetStatus( Mobile from, int index )
 		{
 			switch ( index )
 			{
-				// TODO: Account for buffs/debuffs
 				case 0: return from.GetMaxResistance( ResistanceType.Physical );
 				case 1: return from.GetMaxResistance( ResistanceType.Fire );
 				case 2: return from.GetMaxResistance( ResistanceType.Cold );
@@ -344,17 +341,81 @@ namespace Server
                 case 10: return Math.Min(100, AosAttributes.GetValue(from, AosAttribute.LowerRegCost));
                 case 11: return AosAttributes.GetValue(from, AosAttribute.SpellDamage);
                 case 12: return Math.Min(6, AosAttributes.GetValue(from, AosAttribute.CastRecovery));
-                case 13:
-                    /*int max = from.Skills[SkillName.Chivalry].Value < 70.0 ? 4 : 2;
-                    if (ProtectionSpell.Registry.ContainsKey(from) || EodonianPotion.IsUnderEffects(from, PotionEffect.Urali))
-                    {
-                        return Math.Min(max - 2, AosAttributes.GetValue(from, AosAttribute.CastSpeed) - 2);
-                    }*/
-                    return AosAttributes.GetValue(from, AosAttribute.CastSpeed);
+                case 13: return Math.Min(4, AosAttributes.GetValue(from, AosAttribute.CastSpeed));
                 case 14: return Math.Min(40, AosAttributes.GetValue(from, AosAttribute.LowerManaCost)) + BaseArmor.GetInherentLowerManaCost(from);
+                
+                case 15: return GetManaRegen(from); // HP   REGEN
+                case 16: return GetStamRegen(from); // Stam REGEN
+                case 17: return GetManaRegen(from); // MANA REGEN
+                case 18: return Math.Min(105, AosAttributes.GetValue(from, AosAttribute.ReflectPhysical)); // reflect phys
+                case 19: return Math.Min(50, AosAttributes.GetValue(from, AosAttribute.EnhancePotions)); // enhance pots
+
+                case 20: return AosAttributes.GetValue(from, AosAttribute.BonusStr) + from.GetStatOffset(StatType.Str); // str inc
+                case 21: return AosAttributes.GetValue(from, AosAttribute.BonusDex) + from.GetStatOffset(StatType.Dex); ; // dex inc
+                case 22: return AosAttributes.GetValue(from, AosAttribute.BonusInt) + from.GetStatOffset(StatType.Int); ; // int inc
+
+                case 23: return 0; // hits neg
+                case 24: return 0; // stam neg
+                case 25: return 0; // mana neg
+
+                case 26: return AosAttributes.GetValue(from, AosAttribute.BonusHits); // hits inc
+                case 27: return AosAttributes.GetValue(from, AosAttribute.BonusStam); // stam inc
+                case 28: return AosAttributes.GetValue(from, AosAttribute.BonusMana); // mana inc
 				default: return 0;
 			}
-		}
+        }
+
+        private static int GetHitsRegen(Mobile m)
+        {
+            int regen = AosAttributes.GetValue(m, AosAttribute.RegenHits);
+
+            if (RegenRates.CheckAnimal(m, typeof(Dog)) || RegenRates.CheckAnimal(m, typeof(Cat)))
+                regen += m.Skills[SkillName.Ninjitsu].Fixed / 30;
+
+            if (RegenRates.CheckTransform(m, typeof(HorrificBeastSpell)))
+                regen += 20;
+
+            regen += RampageSpell.GetBonus(m, RampageSpell.BonusType.HitPointRegen);
+            regen += CombatTrainingSpell.RegenBonus(m);
+            regen += BarrabHemolymphConcentrate.HPRegenBonus(m);
+
+            if (m.Race == Race.Human)
+                regen += 2;
+
+            return Math.Min(18, regen);
+        }
+
+        private static int GetStamRegen(Mobile m)
+        {
+            int regen = AosAttributes.GetValue(m, AosAttribute.RegenStam);
+
+            if (RegenRates.CheckTransform(m, typeof(VampiricEmbraceSpell)))
+                regen += 15;
+
+            if (RegenRates.CheckAnimal(m, typeof(Kirin)))
+                regen += 20;
+
+            regen += RampageSpell.GetBonus(m, RampageSpell.BonusType.StamRegen);
+
+            return regen;
+        }
+
+        private static int GetManaRegen(Mobile m)
+        {
+            int regen = AosAttributes.GetValue(m, AosAttribute.RegenMana);
+
+            if (RegenRates.CheckTransform(m, typeof(VampiricEmbraceSpell)))
+                regen += 3;
+
+            if (RegenRates.CheckTransform(m, typeof(LichFormSpell)))
+                regen += 13;
+
+            if (m.Race == Race.Gargoyle)
+                regen += 2;
+
+            return Math.Min(30, regen);
+        }
+        #endregion
     }
 
     [Flags]
@@ -509,7 +570,7 @@ namespace Server
 
                 // attacker gets 10% bonus when they're under divine fury
                 if (DivineFurySpell.UnderEffect(m))
-                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 20 : 10;
+                    value += DivineFurySpell.GetDamageBonus(m);
 
                 // Horrific Beast transformation gives a +25% bonus to damage.
                 if (TransformationSpellHelper.UnderTransformation(m, typeof(HorrificBeastSpell)))
@@ -613,7 +674,7 @@ namespace Server
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))
-                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 15 : 10;
+                    value += DivineFurySpell.GetWeaponSpeedBonus(m);
 
                 value += HonorableExecution.GetSwingBonus(m);
 
@@ -656,7 +717,7 @@ namespace Server
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))
-                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 15 : 10;                    
+                    value += DivineFurySpell.GetAttackBonus(m);                   
 
                 if (BaseWeapon.CheckAnimal(m, typeof(GreyWolf)) || BaseWeapon.CheckAnimal(m, typeof(BakeKitsune)))
                     value += 20; // attacker gets 20% bonus when under Wolf or Bake Kitsune form
@@ -698,7 +759,7 @@ namespace Server
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))
-                    value -= m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 10 : 20;
+                    value -= DivineFurySpell.GetDefendMalus(m);
 
                 if (HitLower.IsUnderDefenseEffect(m))
                     value -= 25; // Under Hit Lower Defense effect -> 25% malus
@@ -733,10 +794,13 @@ namespace Server
 
                 if (SurgeShield.IsUnderEffects(m, SurgeType.Hits))
                     value += 10;
-                #endregion
 
                 if (SearingWeaponContext.HasContext(m))
                     value -= m is PlayerMobile ? 20 : 60;
+                #endregion
+
+                //Virtue Artifacts
+                value += AnkhPendant.GetHitsRegenModifier(m);
             }
             else if (attribute == AosAttribute.RegenStam)
             {
@@ -747,6 +811,9 @@ namespace Server
                 if (SurgeShield.IsUnderEffects(m, SurgeType.Stam))
                     value += 10;
                 #endregion
+
+                //Virtue Artifacts
+                value += AnkhPendant.GetStamRegenModifier(m);
             }
             else if (attribute == AosAttribute.RegenMana)
             {
@@ -762,6 +829,9 @@ namespace Server
                 if (SurgeShield.IsUnderEffects(m, SurgeType.Mana))
                     value += 10;
                 #endregion
+
+                //Virtue Artifacts
+                value += AnkhPendant.GetManaRegenModifier(m);
             }
             else if (attribute == AosAttribute.BonusDex)
             {
@@ -1777,11 +1847,12 @@ namespace Server
     [Flags]
     public enum ExtendedWeaponAttribute
     {
-        BoneBreaker = 0x00000001,
-        HitSwarm = 0x00000002,
-        HitSparks = 0x00000004,
-        Bane = 0x00000008,
-        MysticWeapon = 0x00000010
+        BoneBreaker     = 0x00000001,
+        HitSwarm        = 0x00000002,
+        HitSparks       = 0x00000004,
+        Bane            = 0x00000008,
+        MysticWeapon    = 0x00000010,
+        AssassinHoned   = 0x00000020
     }
 
     public sealed class ExtendedWeaponAttributes : BaseAttributes
@@ -1908,6 +1979,19 @@ namespace Server
             set
             {
                 this[ExtendedWeaponAttribute.MysticWeapon] = value;
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int AssassinHoned
+        {
+            get
+            {
+                return this[ExtendedWeaponAttribute.AssassinHoned];
+            }
+            set
+            {
+                this[ExtendedWeaponAttribute.AssassinHoned] = value;
             }
         }
     }
@@ -2955,17 +3039,73 @@ namespace Server
             if (Prized > 0)
                 list.Add(1154910);
 
-            if (Massive > 0)
-                list.Add(1038003);
+            //if (Massive > 0)
+            //    list.Add(1038003);
 
-            if (Unwieldly > 0)
-                list.Add(1154909);
+            //if (Unwieldly > 0)
+            //    list.Add(1154909);
 
             if (Antique > 0)
                 list.Add(1076187);
 
             if (NoRepair > 0)
                 list.Add(1151782);
+        }
+
+        public const double CombatDecayChance = 0.02;
+
+        public static void OnCombatAction(Mobile m)
+        {
+            if (m == null || !m.Alive)
+                return;
+
+            var list = new List<Item>();
+
+            foreach (var item in m.Items.Where(i => i is IDurability))
+            {
+                NegativeAttributes attrs = RunicReforging.GetNegativeAttributes(item);
+
+                if (attrs != null && attrs.Antique > 0 && CombatDecayChance > Utility.RandomDouble())
+                {
+                    list.Add(item);
+                }
+            }
+
+            foreach (var item in list)
+            {
+                IDurability dur = item as IDurability;
+
+                if (dur == null)
+                    continue;
+
+                if (dur.HitPoints >= 1)
+                {
+                    if (dur.HitPoints >= 4)
+                    {
+                        dur.HitPoints -= 4;
+                    }
+                    else
+                    {
+                        dur.HitPoints = 0;
+                    }
+                }
+                else
+                {
+                    if (dur.MaxHitPoints > 1)
+                    {
+                        dur.MaxHitPoints--;
+
+                        if (item.Parent is Mobile)
+                            ((Mobile)item.Parent).LocalOverheadMessage(Server.Network.MessageType.Regular, 0x3B2, 1061121); // Your equipment is severely damaged.
+                    }
+                    else
+                    {
+                        item.Delete();
+                    }
+                }
+            }
+
+            ColUtility.Free(list);
         }
 
         public int this[NegativeAttribute attribute]

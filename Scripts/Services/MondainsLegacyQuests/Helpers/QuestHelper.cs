@@ -38,7 +38,7 @@ namespace Server.Engines.Quests
                 if (quest != null)
                 {
                     quest.Owner = from;
-                    quest.Quester = quester;					
+                    quest.Quester = quester;				
 				
                     if (CanOffer(from, quest, quests.Length == 1))
                         return quest;
@@ -79,8 +79,8 @@ namespace Server.Engines.Quests
                     for (int k = pQuest.Objectives.Count - 1; k >= 0; k --)
                     {
                         BaseObjective obj = pQuest.Objectives[k];
-						
-                        if (type == obj.Type())
+
+                        if (type == obj.Type() && (quest.ChainID == QuestChain.None || quest.ChainID == pQuest.ChainID))
                             return false;					
                     }
                 }
@@ -172,10 +172,10 @@ namespace Server.Engines.Quests
             {
                 BaseQuest quest = player.Quests[i];
 				
-                if (quest.Quester == null)
+                if (quest.Quester == null && quest.QuesterType == null)
                     continue;
-					
-                if (quest.Quester.GetType() == quester.GetType())
+
+                if (quest.QuesterType == quester.GetType())
                 {
                     if (quest.Completed)		
                     {

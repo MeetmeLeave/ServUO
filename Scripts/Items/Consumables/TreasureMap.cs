@@ -4,9 +4,6 @@
 // **********
 #endregion
 
-//TODO: Implement skeleton keys, and fail lockpick destroying items.
-//TODO: Implement Facet in MapItem and new Map packet
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -85,7 +82,7 @@ namespace Server.Items
 			new Type[]{ typeof( LeatherWolf ), typeof( StoneSlith ), typeof( ToxicSlith ) },
 			new Type[]{ typeof( BloodWorm ), typeof( Kepetch ), typeof( StoneSlith ), typeof( ToxicSlith ) },
 			new Type[]{ typeof( FireAnt ), typeof( LavaElemental ), typeof( MaddeningHorror ) },
-			new Type[]{ typeof( EnragedEarthElemental ), typeof( FireDaemon ), typeof( GreaterPoisonElemental ), typeof( LavaElemental ) },
+			new Type[]{ typeof( EnragedEarthElemental ), typeof( FireDaemon ), typeof( GreaterPoisonElemental ), typeof( LavaElemental ), typeof( DragonWolf ) },
             new Type[]{ typeof( EnragedColossus ), typeof( EnragedEarthElemental ), typeof( FireDaemon ), typeof( GreaterPoisonElemental ), typeof( LavaElemental ) }
         };
         #endregion
@@ -274,7 +271,6 @@ namespace Server.Items
             }
         }
 
-        [Constructable]
         public TreasureMap()
         {
         }
@@ -406,8 +402,6 @@ namespace Server.Items
                         return false;
                 }
             }
-
-
 
             //Checks for roads
             for (int i = 0; i < Server.Multis.HousePlacement.RoadIDs.Length; i += 2)
@@ -816,6 +810,11 @@ namespace Server.Items
                 SendLocalizedMessageTo(from, 503017); // The treasure is marked by the red pin. Grab a shovel and go dig it up!
             }
 
+            if (Pins.Count == 0)
+            {
+                AddWorldPin(ChestLocation.X, ChestLocation.Y);
+            }
+
             from.PlaySound(0x249);
             base.DisplayTo(from);
         }
@@ -963,6 +962,7 @@ namespace Server.Items
                         break;
                     }
             }
+
             if (Core.AOS && m_Decoder != null && LootType == LootType.Regular)
             {
                 LootType = LootType.Blessed;

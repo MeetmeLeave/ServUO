@@ -86,10 +86,11 @@ namespace Server.Engines.ShameRevamped
                     if (component.Location == pnts[0])
                     {
                         var teleporter = new ConditionTeleporter();
-                        teleporter.DeadOnly = true;
+                        //teleporter.DeadOnly = true;
+                        teleporter.ClilocNumber = 1072790; // The wall becomes transparent, and you push your way through it.
                         teleporter.MapDest = map;
                         teleporter.PointDest = pnts[2];
-                        teleporter.DisableMessage = true;
+                        teleporter.DisableMessage = false;
                         teleporter.MoveToWorld(pnts[1], map);
                         WeakEntityCollection.Add("newshame", teleporter);
                     }
@@ -121,7 +122,7 @@ namespace Server.Engines.ShameRevamped
 		public override void Serialize(GenericWriter writer)
 		{
 			base.Serialize(writer);
-			writer.Write((int)1);
+			writer.Write((int)2);
 			
 			writer.Write(Troll);
 			writer.Write(StartSpot);
@@ -147,6 +148,14 @@ namespace Server.Engines.ShameRevamped
 
             if (version == 0)
                 Timer.DelayCall(TimeSpan.FromSeconds(20), () => AddTeleporters(this));
+
+            if (version == 1 && StartSpot == new Point3D(5619, 57, 0) && StartMap == Map.Felucca)
+            {
+                Timer.DelayCall(TimeSpan.FromSeconds(20), () =>
+                    {
+                        ShameWall.AddTeleporters(this);
+                    });
+            }
 		}
 	}
 }

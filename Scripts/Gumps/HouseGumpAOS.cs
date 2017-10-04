@@ -44,7 +44,7 @@ namespace Server.Gumps
         private const int LabelHue = 0x481;
         private const int HighlightedLabelHue = 0x64;
 
-        private ArrayList m_List;
+        private List<Mobile> m_List;
 
         private string GetOwnerName()
         {
@@ -90,12 +90,12 @@ namespace Server.Gumps
             this.AddHtmlLocalized(x + 35, y, 240, 20, number, enabled ? LabelColor : DisabledColor, false, false);
         }
 
-        public void AddList(ArrayList list, int button, bool accountOf, bool leadingStar, Mobile from)
+        public void AddList(List<Mobile> list, int button, bool accountOf, bool leadingStar, Mobile from)
         {
             if (list == null)
                 return;
 
-            this.m_List = new ArrayList(list);
+            this.m_List = new List<Mobile>(list);
 
             int lastPage = 0;
             int index = 0;
@@ -119,7 +119,7 @@ namespace Server.Gumps
                     lastPage = page;
                 }
 
-                Mobile m = (Mobile)list[i];
+                Mobile m = list[i];
 
                 string name;
                 int labelHue = LabelHue;
@@ -314,7 +314,7 @@ namespace Server.Gumps
                         this.AddLabel(250, 330, LabelHue, house.Price.ToString());
 
                         this.AddHtmlLocalized(20, 360, 300, 20, 1011241, SelectedColor, false, false); // Number of visits this building has had: 
-                        this.AddLabel(350, 360, LabelHue, house.Visits.ToString());
+                        this.AddLabel(350, 360, LabelHue, house.TotalVisits.ToString());
 
                         break;
                     }
@@ -739,10 +739,10 @@ namespace Server.Gumps
 
                         house.MoveAllToCrate();
 
-                        newHouse.Friends = new ArrayList(house.Friends);
-                        newHouse.CoOwners = new ArrayList(house.CoOwners);
-                        newHouse.Bans = new ArrayList(house.Bans);
-                        newHouse.Access = new ArrayList(house.Access);
+                        newHouse.Friends = new List<Mobile>(house.Friends);
+                        newHouse.CoOwners = new List<Mobile>(house.CoOwners);
+                        newHouse.Bans = new List<Mobile>(house.Bans);
+                        newHouse.Access = new List<Mobile>(house.Access);
                         newHouse.BuiltOn = house.BuiltOn;
                         newHouse.LastTraded = house.LastTraded;
                         newHouse.Public = house.Public;
@@ -1121,6 +1121,16 @@ namespace Server.Gumps
                                             // You cannot perform this action while you still have vendors rented out in this house.
                                             from.SendGump(new NoticeGump(1060637, 30720, 1062395, 32512, 320, 180, new NoticeGumpCallback(CustomizeNotice_Callback), this.m_House));
                                         }
+                                        else if (m_House.HasAddonContainers)
+                                        {
+                                            // The house can not be customized when add-on containers such as aquariums, elven furniture containers, vanities, and boiling cauldrons 
+                                            // are present in the house.  Please re-deed the add-on containers before customizing the house.
+                                            from.SendGump(new NoticeGump(1060637, 30720, 1074863, 32512, 320, 180, new NoticeGumpCallback(CustomizeNotice_Callback), m_House));
+                                        }
+                                        else if (m_House.Map == Map.TerMur && !Server.Engines.Points.PointsSystem.QueensLoyalty.IsNoble(from))
+                                        {
+                                            from.SendLocalizedMessage(1113714, "2000"); //You can't resize a house in Ter Mur unless you have at least ~1_MIN~ loyalty to the Gargoyle Queen.
+                                        }
                                         else
                                         {
                                             HousePlacementEntry e = this.m_House.ConvertEntry;
@@ -1139,12 +1149,6 @@ namespace Server.Gumps
                                             }
                                         }
                                     }
-                                    #region SA
-                                    else if (m_House.Map == Map.TerMur && !Server.Engines.Points.PointsSystem.QueensLoyalty.IsNoble(from))
-                                    {
-                                        from.SendLocalizedMessage(1113714, "2000"); //You can't resize a house in Ter Mur unless you have at least ~1_MIN~ loyalty to the Gargoyle Queen.
-                                    }
-                                    #endregion
 
                                     break;
                                 }

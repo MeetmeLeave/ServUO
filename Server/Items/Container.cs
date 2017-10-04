@@ -35,7 +35,7 @@ namespace Server.Items
                 pos = GetNewPosition();
             }
 
-            item.GridLocation = pos;
+            if (item.GridLocation != pos) item.GridLocation = pos;
             _Positions[pos] = item;
         }
 
@@ -304,6 +304,19 @@ namespace Server.Items
 
 			return true;
 		}
+
+        public virtual bool CheckStack(Mobile from, Item item)
+        {
+            foreach (var i in Items)
+            {
+                if (i.WillStack(from, item))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
 		public virtual void SendFullItemsMessage(Mobile to, Item item)
 		{
@@ -1741,10 +1754,10 @@ namespace Server.Items
 
 		public virtual bool TryDropItem(Mobile from, Item dropped, bool sendFullMessage)
 		{
-			if (!CheckHold(from, dropped, sendFullMessage, true))
-			{
-				return false;
-			}
+            if (!CheckHold(from, dropped, sendFullMessage, !CheckStack(from, dropped)))
+            {
+                return false;
+            }
 
 			var list = Items;
 

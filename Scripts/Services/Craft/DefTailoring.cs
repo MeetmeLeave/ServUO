@@ -1,5 +1,6 @@
 using System;
 using Server.Items;
+using System.Collections.Generic;
 
 namespace Server.Engines.Craft
 {
@@ -173,9 +174,12 @@ namespace Server.Engines.Craft
 
             #region Materials
 
-            AddCraft(typeof(CutUpCloth), 1044457, 1044458, 0.0, 0.0, typeof(BoltOfCloth), 1044453, 1, 1044253);
-            AddCraft(typeof(CombineCloth), 1044457, 1044459, 0.0, 0.0, typeof(Cloth), 1044455, 1, 1044253);
-            
+            index = AddCraft(typeof(CutUpCloth), 1044457, 1044458, 0.0, 0.0, typeof(BoltOfCloth), 1044453, 1, 1044253);
+            AddCraftAction(index, CutUpCloth);
+
+            index = AddCraft(typeof(CombineCloth), 1044457, 1044459, 0.0, 0.0, typeof(Cloth), 1044455, 1, 1044253);
+            AddCraftAction(index, CombineCloth);
+
             if (Core.HS)
             {
                 index = AddCraft(typeof(LightPowderCharge), 1044457, 1116159, 0.0, 50.0, typeof(Cloth), 1044286, 1, 1044253);
@@ -685,16 +689,16 @@ namespace Server.Engines.Craft
                 index = this.AddCraft(typeof(GargishClothKiltArmor), 1111748, 1021031, 82.9, 132.9, typeof(Cloth), 1044286, 6, 1044463);
                 this.SetNeededExpansion(index, Expansion.SA);
 
-                index = this.AddCraft(typeof(FemaleGargishClothArms), 1111748, 1021027, 87.1, 137.1, typeof(Cloth), 1044286, 8, 1044463);
+                index = this.AddCraft(typeof(FemaleGargishClothArmsArmor), 1111748, 1021027, 87.1, 137.1, typeof(Cloth), 1044286, 8, 1044463);
                 this.SetNeededExpansion(index, Expansion.SA);
 
-                index = this.AddCraft(typeof(FemaleGargishClothChest), 1111748, 1021029, 94.0, 144.0, typeof(Cloth), 1044286, 8, 1044463);
+                index = this.AddCraft(typeof(FemaleGargishClothChestArmor), 1111748, 1021029, 94.0, 144.0, typeof(Cloth), 1044286, 8, 1044463);
                 this.SetNeededExpansion(index, Expansion.SA);
 
-                index = this.AddCraft(typeof(FemaleGargishClothLegs), 1111748, 1021033, 91.2, 141.2, typeof(Cloth), 1044286, 10, 1044463);
+                index = this.AddCraft(typeof(FemaleGargishClothLegsArmor), 1111748, 1021033, 91.2, 141.2, typeof(Cloth), 1044286, 10, 1044463);
                 this.SetNeededExpansion(index, Expansion.SA);
 
-                index = this.AddCraft(typeof(FemaleGargishClothKilt), 1111748, 1021031, 82.9, 132.9, typeof(Cloth), 1044286, 6, 1044463);
+                index = this.AddCraft(typeof(FemaleGargishClothKiltArmor), 1111748, 1021031, 82.9, 132.9, typeof(Cloth), 1044286, 6, 1044463);
                 this.SetNeededExpansion(index, Expansion.SA);
 
                 index = this.AddCraft(typeof(GargishClothWingArmor), 1111748, 1115393, 65.0, 90.0, typeof(Cloth), 1044286, 12, 1044463);
@@ -829,6 +833,175 @@ namespace Server.Engines.Craft
             this.Repair = Core.AOS;
             this.CanEnhance = Core.ML;
 			this.CanAlter = Core.SA;
+        }
+
+        private void CutUpCloth(Mobile m, CraftItem craftItem, BaseTool tool)
+        {
+            PlayCraftEffect(m);
+
+            Timer.DelayCall(TimeSpan.FromSeconds(Delay), () =>
+                {
+                    if (m.Backpack == null)
+                    {
+                        m.SendGump(new CraftGump(m, this, tool, null));
+                    }
+
+                    Dictionary<int, int> bolts = new Dictionary<int, int>();
+                    List<Item> toConsume = new List<Item>();
+                    object num = null;
+                    Container pack = m.Backpack;
+
+                    foreach (var item in pack.Items)
+                    {
+                        if (item.GetType() == typeof(BoltOfCloth))
+                        {
+                            if (!bolts.ContainsKey(item.Hue))
+                            {
+                                toConsume.Add(item);
+                                bolts[item.Hue] = item.Amount;
+                            }
+                            else
+                            {
+                                toConsume.Add(item);
+                                bolts[item.Hue] += item.Amount;
+                            }
+                        }
+                    }
+
+                    if (bolts.Count == 0)
+                    {
+                        num = 1044253; // You don't have the components needed to make that.
+                    }
+                    else
+                    {
+                        foreach (var item in toConsume)
+                        {
+                            item.Delete();
+                        }
+
+                        foreach (var kvp in bolts)
+                        {
+                            var cloth = new UncutCloth(kvp.Value * 50);
+                            cloth.Hue = kvp.Key;
+
+                            DropItem(m, cloth, tool);
+                        }
+                    }
+
+                    if (tool != null)
+                    {
+                        tool.UsesRemaining--;
+
+                        if (tool.UsesRemaining <= 0 && !tool.Deleted)
+                        {
+                            tool.Delete();
+                            m.SendLocalizedMessage(1044038);
+                        }
+                        else
+                        {
+                            m.SendGump(new CraftGump(m, this, tool, num));
+                        }
+                    }
+
+                    ColUtility.Free(toConsume);
+                    bolts.Clear();
+                });
+        }
+
+        private void CombineCloth(Mobile m, CraftItem craftItem, BaseTool tool)
+        {
+            PlayCraftEffect(m);
+
+            Timer.DelayCall(TimeSpan.FromSeconds(Delay), () =>
+                {
+                    if (m.Backpack == null)
+                    {
+                        m.SendGump(new CraftGump(m, this, tool, null));
+                    }
+
+                    Container pack = m.Backpack;
+
+                    Dictionary<int, int> cloth = new Dictionary<int, int>();
+                    List<Item> toConsume = new List<Item>();
+                    object num = null;
+
+                    foreach (var item in pack.Items)
+                    {
+                        Type t = item.GetType();
+
+                        if (t == typeof(UncutCloth) || t == typeof(Cloth) || t == typeof(CutUpCloth))
+                        {
+                            if (!cloth.ContainsKey(item.Hue))
+                            {
+                                toConsume.Add(item);
+                                cloth[item.Hue] = item.Amount;
+                            }
+                            else
+                            {
+                                toConsume.Add(item);
+                                cloth[item.Hue] += item.Amount;
+                            }
+                        }
+                    }
+
+                    if (cloth.Count == 0)
+                    {
+                        num = 1044253; // You don't have the components needed to make that.
+                    }
+                    else
+                    {
+                        foreach (var item in toConsume)
+                        {
+                            item.Delete();
+                        }
+
+                        foreach (var kvp in cloth)
+                        {
+                            var c = new UncutCloth(kvp.Value);
+                            c.Hue = kvp.Key;
+
+                            DropItem(m, c, tool);
+                        }
+                    }
+
+                    if (tool != null)
+                    {
+                        tool.UsesRemaining--;
+
+                        if (tool.UsesRemaining <= 0 && !tool.Deleted)
+                        {
+                            tool.Delete();
+                            m.SendLocalizedMessage(1044038);
+                        }
+                        else
+                        {
+                            m.SendGump(new CraftGump(m, this, tool, num));
+                        }
+                    }
+
+                    ColUtility.Free(toConsume);
+                    cloth.Clear();
+                });
+        }
+
+        private void DropItem(Mobile from, Item item, BaseTool tool)
+        {
+            if (tool.Parent is Container)
+            {
+                Container cntnr = (Container)tool.Parent;
+
+                if (!cntnr.TryDropItem(from, item, false))
+                {
+                    if (cntnr != from.Backpack)
+                        from.AddToBackpack(item);
+                    else
+                        item.MoveToWorld(from.Location, from.Map);
+                }
+            }
+            else
+            {
+                from.AddToBackpack(item);
+            }
         }
     }
 }

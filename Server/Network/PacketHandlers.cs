@@ -56,8 +56,6 @@ namespace Server.Network
 
 		public static PacketHandler[] Handlers { get { return m_Handlers; } }
 
-        public static bool AllowEC = Config.Get("Client.AllowEC", true);
-
 		static PacketHandlers()
 		{
 			m_Handlers = new PacketHandler[0x100];
@@ -132,6 +130,8 @@ namespace Server.Network
 			Register(0xD6, 0, true, BatchQueryProperties);
 			Register(0xD7, 0, true, EncodedCommand);
 			Register(0xE1, 0, false, ClientType);
+            Register(0xEC, 0, false, EquipMacro);
+            Register(0xED, 0, false, UnequipMacro);
 			Register(0xEF, 21, false, LoginServerSeed);
 			Register(0xF4, 0, false, CrashReport);
 			Register(0xF8, 106, false, CreateCharacter70160);
@@ -141,8 +141,6 @@ namespace Server.Network
             Register(0xE1, 0, false, KRCharacterListUpdate);
             Register(0xE4, 0, false, KRVerifierResponse);
             Register(0xFF, 4, false, KRSeed);
-            Register(0xEC, 0, false, EquipMacro);
-            Register(0xED, 0, false, UnequipMacro);
 
             RegisterExtended(0x05, false, ScreenSize);
 			RegisterExtended(0x06, true, PartyMessage);
@@ -1733,6 +1731,22 @@ namespace Server.Network
 		{
             int range = pvSrc.ReadByte();
 
+            //            min   max  default
+            /* 640x480    5     18   15
+             * 800x600    5     18   18
+             * 1024x768   5     24   24
+             * 1152x864   5     24   24 
+             * 1280x720   5     24   24
+             */
+
+            int old = state.UpdateRange;
+            state.UpdateRange = range;
+
+            if (state.Mobile != null)
+            {
+                state.Mobile.OnUpdateRangeChanged(old, range);
+            }
+
             state.Send(ChangeUpdateRange.Instantiate(range));
 		}
 
@@ -1922,7 +1936,7 @@ namespace Server.Network
 				{
 					Mobile m = World.FindMobile(s);
 
-					if (m != null && from.CanSee(m) && Utility.InUpdateRange(from, m))
+					if (m != null && from.CanSee(m) && from.InUpdateRange(m))
 					{
 						m.SendPropertiesTo(from);
 					}
@@ -1932,7 +1946,7 @@ namespace Server.Network
 					Item item = World.FindItem(s);
 
 					if (item != null && !item.Deleted && from.CanSee(item) &&
-						Utility.InUpdateRange(from.Location, item.GetWorldLocation()))
+                        from.InUpdateRange(item.GetWorldLocation()))
 					{
 						item.SendPropertiesTo(from);
 					}
@@ -1955,7 +1969,7 @@ namespace Server.Network
 			{
 				Mobile m = World.FindMobile(s);
 
-				if (m != null && from.CanSee(m) && Utility.InUpdateRange(from, m))
+                if (m != null && from.CanSee(m) && from.InUpdateRange(m))
 				{
 					m.SendPropertiesTo(from);
 				}
@@ -1965,7 +1979,7 @@ namespace Server.Network
 				Item item = World.FindItem(s);
 
 				if (item != null && !item.Deleted && from.CanSee(item) &&
-					Utility.InUpdateRange(from.Location, item.GetWorldLocation()))
+                    from.InUpdateRange(item.GetWorldLocation()))
 				{
 					item.SendPropertiesTo(from);
 				}
@@ -2143,6 +2157,11 @@ namespace Server.Network
 
 						int index = pvSrc.ReadUInt16();
 
+                        if (state.IsEnhancedClient && index > 0x64)
+                        {
+                            index = menu.GetIndexEC(index);
+                        }
+
 						if (index >= 0 && index < menu.Entries.Length)
 						{
 							ContextMenuEntry e = menu.Entries[index];
@@ -2154,10 +2173,13 @@ namespace Server.Network
 								range = 18;
 							}
 
-							if (e.Enabled && from.InRange(p, range))
-							{
-								e.OnClick();
-							}
+                            if (e.Enabled && from.InRange(p, range))
+                            {
+                                if (state.IsEnhancedClient)
+                                    Timer.DelayCall(TimeSpan.FromMilliseconds(100), e.OnClick);
+                                else
+                                    e.OnClick();
+                            }
 						}
 					}
 				}
@@ -2241,17 +2263,9 @@ namespace Server.Network
 		public static void ClientType(NetState state, PacketReader pvSrc)
 		{
 			pvSrc.ReadUInt16(); // 0x1
-			pvSrc.ReadUInt32(); // 0x3
+            pvSrc.ReadUInt32(); // 0x2 for KR, 0x3 for EC
 
-            // TODO: Eventually create a EC event sink to handle in ClientVerification.cs if EC clients matter
-            if (!AllowEC && state.IsEnhancedClient)
-            {
-                Utility.PushColor(ConsoleColor.DarkRed);
-                Console.WriteLine("Enhanced Client: {0}: Disconnecting...", state);
-                Utility.PopColor();
-
-                state.Dispose();
-            }
+            EventSink.InvokeClientTypeReceived(new ClientTypeReceivedArgs(state));
 		}
 
 		public static void MobileQuery(NetState state, PacketReader pvSrc)
@@ -3133,8 +3147,6 @@ namespace Server.Network
         // KR Client Character Creation
         public static void KRCreateCharacter(NetState state, PacketReader pvSrc)
         {
-            int flags = 0;
-
             int length = pvSrc.Size;
 
             int unk1 = pvSrc.ReadInt32(); // Pattern
@@ -3143,7 +3155,7 @@ namespace Server.Network
             string unknown1 = pvSrc.ReadString(30); // "Unknow"
 
             int profession = pvSrc.ReadByte();
-            int clientFlags = pvSrc.ReadByte();
+            int cityIndex = pvSrc.ReadByte();
 
             int gender = pvSrc.ReadByte();
             int genderRace = pvSrc.ReadByte();
@@ -3187,7 +3199,6 @@ namespace Server.Network
             int beardColor = pvSrc.ReadInt16();
             int beardID = pvSrc.ReadInt16();
 
-            int cityIndex = 0; // Obsolete
             int pantsHue = shirtHue; // Obsolete
             Race race = null;
             bool female = false;
@@ -3197,12 +3208,8 @@ namespace Server.Network
             if (race == null)
                 race = Race.DefaultRace;
 
-
             CityInfo[] info = state.CityInfo;
             IAccount a = state.Account;
-
-            if (clientFlags > 0)
-                flags = clientFlags;
 
             if (info == null || a == null || cityIndex < 0 || cityIndex >= info.Length)
             {
@@ -3222,8 +3229,6 @@ namespace Server.Network
                         return;
                     }
                 }
-
-                state.Flags = (ClientFlags)flags;
 
                 CharacterCreatedEventArgs args = new CharacterCreatedEventArgs(
                     state, a,
@@ -3280,8 +3285,7 @@ namespace Server.Network
                 serialList.Add(s);
             }
 
-            EquipMacroEventArgs e = new EquipMacroEventArgs(ns, serialList);
-            EventSink.InvokeEquipMacro(e);
+            EventSink.InvokeEquipMacro(new EquipMacroEventArgs(ns.Mobile, serialList));
         }
 
         public static void UnequipMacro(NetState ns, PacketReader pvSrc)
@@ -3296,16 +3300,15 @@ namespace Server.Network
                 layers.Add(s);
             }
 
-            UnequipMacroEventArgs e = new UnequipMacroEventArgs(ns, layers);
-            EventSink.InvokeUnequipMacro(e);
+            EventSink.InvokeUnequipMacro(new UnequipMacroEventArgs(ns.Mobile, layers));
         }
 
         public static void TargetedSpell(NetState ns, PacketReader pvSrc)
         {
             short spellId = (short)(pvSrc.ReadInt16() - 1);    // zero based;
             Serial target = pvSrc.ReadInt32();
-            TargetedSpellEventArgs e = new TargetedSpellEventArgs(ns, World.FindEntity(target), spellId);
-            EventSink.InvokeTargetedSpell(e);
+
+            EventSink.InvokeTargetedSpell(new TargetedSpellEventArgs(ns.Mobile, World.FindEntity(target), spellId));
         }
 
         public static void TargetedItemUse(NetState ns, PacketReader pvSrc)
@@ -3315,8 +3318,7 @@ namespace Server.Network
 
             if (srcItem.IsItem)
             {
-                TargetedItemUseEventArgs e = new TargetedItemUseEventArgs(ns, World.FindItem(srcItem), World.FindEntity(target));
-                EventSink.InvokeTargetedItemUse(e);
+                EventSink.InvokeTargetedItemUse(new TargetedItemUseEventArgs(ns.Mobile, World.FindItem(srcItem), World.FindEntity(target)));
             }
         }
 
@@ -3324,21 +3326,18 @@ namespace Server.Network
         {
             short skillId = pvSrc.ReadInt16();
             Serial target = pvSrc.ReadInt32();
-            TargetedSkillEventArgs e = new TargetedSkillEventArgs(ns, World.FindEntity(target), skillId);
-            EventSink.InvokeTargetedSkill(e);
+
+            EventSink.InvokeTargetedSkill(new TargetedSkillEventArgs(ns.Mobile, World.FindEntity(target), skillId));
         }
 
         public static void TargetByResourceMacro(NetState ns, PacketReader pvSrc)
         {
-            int length = pvSrc.Size;
-            int Command = pvSrc.ReadInt16();
             Serial serial = pvSrc.ReadInt32();
             int resourcetype = pvSrc.ReadInt16();
 
             if (serial.IsItem)
             {
-                TargetByResourceMacroEventArgs e = new TargetByResourceMacroEventArgs(ns, World.FindItem(serial), resourcetype);
-                EventSink.InvokeTargetByResourceMacro(e);
+                EventSink.InvokeTargetByResourceMacro(new TargetByResourceMacroEventArgs(ns.Mobile, World.FindItem(serial), resourcetype));
             }
         }
     }

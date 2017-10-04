@@ -93,7 +93,7 @@ namespace Server.Items
             }
             #endregion
 
-            if (house != null && house.IsOwner(from) && house.Addons.Contains(this))
+            if (house != null && (house.IsOwner(from) || (house.Addons.ContainsKey(this) && house.Addons[this] == from)))
             {
                 Effects.PlaySound(this.GetWorldLocation(), this.Map, 0x3B3);
                 from.SendLocalizedMessage(500461); // You destroy the item.
@@ -208,7 +208,7 @@ namespace Server.Items
                 if (RestrictToClassicHouses && house is HouseFoundation)
                     return AddonFitResult.BadHouse;
 
-                ArrayList doors = house.Doors;
+                var doors = house.Doors;
 
                 for (int i = 0; i < doors.Count; ++i)
                 {
@@ -235,7 +235,7 @@ namespace Server.Items
         {
             house = BaseHouse.FindHouseAt(p, map, height);
 
-            if (house == null || (from != null && !house.IsOwner(from)))
+            if (house == null || (from != null && !house.IsCoOwner(from)))
                 return false;
 
             return true;
@@ -368,7 +368,9 @@ namespace Server.Items
         {
             base.Serialize(writer);
 
-            writer.Write((int)1); // version
+            writer.Write((int)2); // version
+
+            writer.Write((int)m_Resource);
 
             writer.WriteItemList<AddonComponent>(this.m_Components);
         }
@@ -381,6 +383,9 @@ namespace Server.Items
 
             switch ( version )
             {
+                case 2:
+                    m_Resource = (CraftResource)reader.ReadInt();
+                    goto case 1;
                 case 1:
                 case 0:
                     {

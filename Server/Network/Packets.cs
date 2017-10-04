@@ -2281,7 +2281,7 @@ m_Stream.Write( (int) renderMode );
 			m_Stream.Write((short)item.Y);
             m_Stream.Write((byte)item.GridLocation);
             m_Stream.Write(parentSerial);
-			m_Stream.Write((ushort)(item.QuestItem ? Item.QuestItemHue : item.Hue));
+			m_Stream.Write((ushort)(item.QuestItem ? item.QuestItemHue : item.Hue));
 		}
 	}
 
@@ -2310,7 +2310,7 @@ m_Stream.Write( (int) renderMode );
 			m_Stream.Write((short)item.Y);
             m_Stream.Write((byte)item.GridLocation);
             m_Stream.Write(parentSerial);
-			m_Stream.Write((ushort)(item.QuestItem ? Item.QuestItemHue : item.Hue));
+			m_Stream.Write((ushort)(item.QuestItem ? item.QuestItemHue : item.Hue));
 		}
 	}
 
@@ -2351,7 +2351,7 @@ m_Stream.Write( (int) renderMode );
 					m_Stream.Write((short)loc.m_Y);
                     m_Stream.Write((byte)child.GridLocation);
                     m_Stream.Write(beheld.Serial);
-					m_Stream.Write((ushort)(child.QuestItem ? Item.QuestItemHue : child.Hue));
+					m_Stream.Write((ushort)(child.QuestItem ? child.QuestItemHue : child.Hue));
 
 					++written;
 				}
@@ -2399,7 +2399,7 @@ m_Stream.Write( (int) renderMode );
 					m_Stream.Write((short)loc.m_Y);
                     m_Stream.Write((byte)child.GridLocation);
                     m_Stream.Write(beheld.Serial);
-					m_Stream.Write((ushort)(child.QuestItem ? Item.QuestItemHue : child.Hue));
+					m_Stream.Write((ushort)(child.QuestItem ? child.QuestItemHue : child.Hue));
 
 					++written;
 				}
@@ -3501,14 +3501,14 @@ m_Stream.Write( (int) renderMode );
 
 	public sealed class NewMobileAnimation : Packet
 	{
-		public NewMobileAnimation(Mobile m, int action, int frameCount, int delay)
+        public NewMobileAnimation(Mobile m, AnimationType type, int action, int delay)
 			: base(0xE2, 10)
 		{
-			m_Stream.Write(m.Serial);
-			m_Stream.Write((short)action);
-			m_Stream.Write((short)frameCount);
-			m_Stream.Write((byte)delay);
-		}
+            m_Stream.Write(m.Serial);
+            m_Stream.Write((short)type);
+            m_Stream.Write((short)action);
+            m_Stream.Write((byte)delay);
+        }
 	}
 
 	public sealed class MobileStatusCompact : Packet
@@ -3548,10 +3548,10 @@ m_Stream.Write( (int) renderMode );
 
 			int type;
 
-			if (Core.HS && ns != null && ns.ExtendedStatus)
+            if (Core.HS && ns != null && ns.ExtendedStatus)
 			{
 				type = 6;
-				EnsureCapacity(121);
+				EnsureCapacity(ns.IsEnhancedClient ? 151 : 121);
 			}
 			else if (Core.ML && ns != null && ns.SupportsExpansion(Expansion.ML))
 			{
@@ -3626,7 +3626,9 @@ m_Stream.Write( (int) renderMode );
 
 			if (type >= 6)
 			{
-				for (int i = 0; i < 15; ++i)
+                int count = ns.IsEnhancedClient ? 28 : 14;
+
+                for (int i = 0; i <= count; ++i)
 				{
 					m_Stream.Write((short)m.GetAOSStatus(i));
 				}
@@ -3652,21 +3654,15 @@ m_Stream.Write( (int) renderMode );
             int type;
             bool isEnhancedClient = beholder.NetState != null && beholder.NetState.IsEnhancedClient;
 
-
             if (beholder != beheld)
             {
                 type = 0;
                 EnsureCapacity(43);
             }
-            else if (isEnhancedClient)
-            {
-                type = 7;
-                EnsureCapacity(126);
-            }
             else if (Core.HS && ns != null && ns.ExtendedStatus)
             {
                 type = 6;
-                EnsureCapacity(121);
+                EnsureCapacity(isEnhancedClient ? 151 : 121);
             }
             else if (Core.ML && ns != null && ns.SupportsExpansion(Expansion.ML))
             {
@@ -3680,7 +3676,6 @@ m_Stream.Write( (int) renderMode );
             }
 
             m_Stream.Write(beheld.Serial);
-
             m_Stream.WriteAsciiFixed(name, 30);
 
             if (beholder == beheld)
@@ -3747,8 +3742,8 @@ m_Stream.Write( (int) renderMode );
 
                 if (type >= 6)
                 {
-                    int count = isEnhancedClient ? 20 : 15;
-                    for (int i = 0; i < count; ++i)
+                    int count = isEnhancedClient ? 28 : 14;
+                    for (int i = 0; i <= count; ++i)
                     {
                         m_Stream.Write((short)beheld.GetAOSStatus(i));
                     }
@@ -3815,6 +3810,54 @@ m_Stream.Write( (int) renderMode );
 			}
 		}
 	}
+
+    public sealed class HealthbarYellowEC : Packet
+    {
+        public HealthbarYellowEC(Mobile m)
+            : base(0x16)
+        {
+            EnsureCapacity(12);
+
+            m_Stream.Write(m.Serial);
+
+            m_Stream.Write((short)1);
+            m_Stream.Write((short)2);
+
+            if (m.Blessed || m.YellowHealthbar)
+            {
+                m_Stream.Write((byte)1);
+            }
+            else
+            {
+                m_Stream.Write((byte)0);
+            }
+        }
+    }
+
+    public sealed class HealthbarPoisonEC : Packet
+    {
+        public HealthbarPoisonEC(Mobile m)
+            : base(0x16)
+        {
+            EnsureCapacity(12);
+
+            m_Stream.Write(m.Serial);
+
+            m_Stream.Write((short)1);
+            m_Stream.Write((short)1);
+
+            Poison p = m.Poison;
+
+            if (p != null)
+            {
+                m_Stream.Write((byte)(p.Level + 1));
+            }
+            else
+            {
+                m_Stream.Write((byte)0);
+            }
+        }
+    }
 
 	public sealed class MobileUpdate : Packet
 	{
@@ -3909,6 +3952,10 @@ m_Stream.Write( (int) renderMode );
 			{
 				count++;
 			}
+            if (beheld.FaceItemID > 0)
+            {
+                count++;
+            }
 
 			EnsureCapacity(23 + (count * 9));
 
@@ -3999,6 +4046,28 @@ m_Stream.Write( (int) renderMode );
 					m_Stream.Write((short)hue);
 				}
 			}
+
+            if (beheld.FaceItemID > 0)
+            {
+                if (m_DupedLayers[(int)Layer.Face] != m_Version)
+                {
+                    m_DupedLayers[(int)Layer.Face] = m_Version;
+                    hue = beheld.FaceHue;
+
+                    if (beheld.SolidHueOverride >= 0)
+                    {
+                        hue = beheld.SolidHueOverride;
+                    }
+
+                    int itemID = beheld.FaceItemID & 0xFFFF;
+
+                    m_Stream.Write(FaceInfo.FakeSerial(beheld));
+                    m_Stream.Write((ushort)itemID);
+                    m_Stream.Write((byte)Layer.Face);
+
+                    m_Stream.Write((short)hue);
+                }
+            }
 
 			m_Stream.Write(0); // terminate
 		}
@@ -4689,14 +4758,12 @@ m_Stream.Write( (int) renderMode );
 			}
 			else if (a.Limit == 1)
 			{
-				flags |= (CharacterListFlags.SlotLimit & CharacterListFlags.OneCharacterSlot); // Limit Characters & One Character
+                flags |= (CharacterListFlags.SlotLimit | CharacterListFlags.OneCharacterSlot); // Limit Characters & One Character
 			}
 
-            if (IsEnhancedClient) {
+            if (IsEnhancedClient)
+            {
                 flags |= CharacterListFlags.KR; // Suppport Enhanced Client / KR flag 1 and 2 (0x200 + 0x400)
-                Console.WriteLine("Enhanced Client Detected");
-            } else {
-                Console.WriteLine("Enhanced Client Not Detected");
             }
 
             m_Stream.Write((int)(flags | m_AdditionalFlags)); // Additional Flags
@@ -4800,7 +4867,7 @@ m_Stream.Write( (int) renderMode );
 			}
 			else if (a.Limit == 1)
 			{
-				flags |= (CharacterListFlags.SlotLimit & CharacterListFlags.OneCharacterSlot); // Limit Characters & One Character
+				flags |= (CharacterListFlags.SlotLimit | CharacterListFlags.OneCharacterSlot); // Limit Characters & One Character
 			}
 
 			m_Stream.Write((int)(flags | CharacterList.AdditionalFlags)); // Additional Flags
@@ -5139,106 +5206,6 @@ m_Stream.Write( (int) renderMode );
         public KRDropConfirm()
             : base(0x29, 1)
         {
-        }
-    }
-
-    public enum WaypointType : ushort
-    {
-        Corpse = 0x01,
-        PartyMember = 0x02,
-        RallyPoint = 0x03,
-        QuestGiver = 0x04,
-        QuestDestination = 0x05,
-        Resurrection = 0x06,
-        PointOfInterest = 0x07,
-        Landmark = 0x08,
-        Town = 0x09,
-        Dungeon = 0x0A,
-        Moongate = 0x0B,
-        Shop = 0x0C,
-        Player = 0x0D,
-    }
-
-    public sealed class DisplayWaypoint : Packet
-    {
-        public DisplayWaypoint(Serial serial, int x, int y, int z, int mapID, /*int type*/WaypointType type, string name)
-            : base(0xE5)
-        {
-            this.EnsureCapacity(25);
-
-            m_Stream.Write((int)serial);
-
-            m_Stream.Write((short)x);
-            m_Stream.Write((short)y);
-            m_Stream.Write((sbyte)z);
-            m_Stream.Write((byte)mapID); //map 
-
-            m_Stream.Write((ushort)type);
-            //m_Stream.Write((short)type); //type 
-
-            m_Stream.Write((short)0);
-
-            if (type.Equals(1))
-                m_Stream.Write((int)1046414);
-            else
-                m_Stream.Write((int)1062613);
-
-            m_Stream.WriteLittleUniNull(name);
-
-            m_Stream.Write((short)0); // terminate 
-        }
-    }
-
-    public class KRDisplayWaypoint : Packet
-    {
-        public KRDisplayWaypoint(IEntity e, WaypointType type, int cliLoc)
-            : this(e.Serial, e.Location, e.Map, type, false, cliLoc, String.Empty)
-        {
-        }
-
-        public KRDisplayWaypoint(IEntity e, WaypointType type, bool ignoreSerial, int cliLoc, string args)
-            : this(e.Serial, e.Location, e.Map, type, ignoreSerial, cliLoc, args)
-        {
-        }
-
-        public KRDisplayWaypoint(Serial serial, IPoint3D location, Map map, WaypointType type, bool ignoreSerial, int cliLoc)
-            : this(serial, location, map, type, ignoreSerial, cliLoc, String.Empty)
-        {
-        }
-
-        public KRDisplayWaypoint(Serial serial, IPoint3D location, Map map, WaypointType type, bool ignoreSerial, int cliLoc, string args)
-            : base(0xE5)
-        {
-            if (args == null)
-            {
-                args = String.Empty;
-            }
-
-            EnsureCapacity(21 + (args.Length * 2));
-
-            m_Stream.Write((int)serial);
-
-            m_Stream.Write((ushort)location.X);
-            m_Stream.Write((ushort)location.Y);
-            m_Stream.Write((byte)location.Z);
-
-            m_Stream.Write((byte)map.MapID);
-
-            m_Stream.Write((ushort)type);
-
-            m_Stream.Write((ushort)(ignoreSerial ? 1 : 0));
-
-            m_Stream.Write(cliLoc);
-            m_Stream.WriteLittleUniNull(args);
-        }
-    }
-
-    public class RemoveWaypoint : Packet
-    {
-        public RemoveWaypoint(Serial serial)
-            : base(0xE6, 5)
-        {
-            m_Stream.Write((int)serial);
         }
     }
 

@@ -34,7 +34,8 @@ namespace Server
 			DataDirectories = new List<string>();
 
 			GlobalMaxUpdateRange = 24;
-			GlobalUpdateRange = 18;
+			GlobalUpdateRange = 24;
+            GlobalRadarRange = 37;
 		}
 
 		private static bool _Crashed;
@@ -541,7 +542,7 @@ namespace Server
 
 				Console.WriteLine(" - Press return to exit, or R to try again.");
 
-				if (Insensitive.Equals(Console.ReadLine(), "R"))
+                if (Console.ReadKey(true).Key != ConsoleKey.R)
 				{
 					return;
 				}
@@ -662,6 +663,7 @@ namespace Server
 
 		public static int GlobalUpdateRange { get; set; }
 		public static int GlobalMaxUpdateRange { get; set; }
+        public static int GlobalRadarRange { get; set; }
 		
 		private static int m_ItemCount, m_MobileCount, m_CustomsCount;
 

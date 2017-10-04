@@ -12,6 +12,7 @@ using Server.Factions;
 using Server.Gumps;
 using Server.Mobiles;
 using Server.Targeting;
+using Server.Network;
 #endregion
 
 namespace Server.Items
@@ -142,6 +143,7 @@ namespace Server.Items
 					{
 						if (BandageContext.BeginHeal(from, (Mobile)targeted, m_Bandage is EnhancedBandage) != null)
 						{
+                            NegativeAttributes.OnCombatAction(from);
 							m_Bandage.Consume();
 						}
 					}
@@ -154,6 +156,7 @@ namespace Server.Items
 				{
 					if (((PlagueBeastInnard)targeted).OnBandage(from))
 					{
+                        NegativeAttributes.OnCombatAction(from);
 						m_Bandage.Consume();
 					}
 				}
@@ -550,6 +553,10 @@ namespace Server.Items
                         toHeal = 1;
                         healerNumber = 500968; // You apply the bandages, but they barely help.
                     }
+                    else if (m_Patient != m_Healer && m_Patient is PlayerMobile && m_Healer is PlayerMobile)
+                    {
+                        SpiritualityVirtue.OnHeal(m_Healer, Math.Min((int)toHeal, m_Patient.HitsMax - m_Patient.Hits));
+                    }
 
                     m_Patient.Heal((int)toHeal, m_Healer, false);
                 }
@@ -669,7 +676,7 @@ namespace Server.Items
                 {
                     if (Core.AOS)
                     {
-                        seconds = Math.Ceiling((double)11 - healer.Dex / 20);
+                        seconds = Math.Min(8, Math.Ceiling(11.0 - healer.Dex / 20));
                         seconds = Math.Max(seconds, 4);
                     }
                     else
@@ -729,10 +736,31 @@ namespace Server.Items
                 }
 
                 healer.SendLocalizedMessage(500956); // You begin applying the bandages.
+
+                if (healer.NetState != null && healer.NetState.IsEnhancedClient)
+                {
+                    healer.NetState.Send(new BandageTimerPacket((int)(seconds / 1000)));
+                }
+
                 return context;
             }
 
             return null;
         }
 	}
+
+    public sealed class BandageTimerPacket : Packet
+    {
+        public BandageTimerPacket(int duration)
+            : base(0xBF)
+        {
+            EnsureCapacity(15);
+
+            m_Stream.Write((short)0x31);
+            m_Stream.Write((short)0x01);
+
+            m_Stream.Write((int)0xE21);
+            m_Stream.Write(duration);
+        }
+    }
 }

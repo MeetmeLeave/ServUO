@@ -28,9 +28,9 @@ namespace Server.Engines.Shadowguard
 			typeof(BalakaisShamanStaffGargoyle),typeof(EnchantressCameo),			typeof(GrugorsShield),			typeof(GrugorsShieldGargoyle),
 			typeof(HalawasHuntingBow),			typeof(HalawasHuntingBowGargoyle),	typeof(HawkwindsRobe),			typeof(JumusSacredHide),
 			typeof(JumusSacredHideGargoyle), 	typeof(JuonarsGrimoire), 			typeof(LereisHuntingSpear), 	typeof(LereisHuntingSpearGargoyle), 
-			typeof(MinaxsSandles), 				typeof(MinaxsSandlesGargoyle), 		typeof(MocapotilsObsidianSword),typeof(OzymandiasObi),
+			typeof(MinaxsSandles), 				typeof(MinaxsSandlesGargoyle), 		typeof(OzymandiasObi),
 			typeof(OzymandiasObiGargoyle), 		typeof(ShantysWaders), 				typeof(ShantysWadersGargoyle), 	typeof(TotemOfTheTribe),
-			typeof(WamapsBoneEarrings), 		typeof(WamapsBoneEarringsGargoyle), typeof(UnstableTimeRift)
+			typeof(WamapsBoneEarrings), 		typeof(WamapsBoneEarringsGargoyle), typeof(UnstableTimeRift),       typeof(MocapotlsObsidianSword)
 		};
 		
 		public ShadowguardBoss(AIType ai) : base(ai, FightMode.Closest, 10, 1, .15, .3)
@@ -100,7 +100,9 @@ namespace Server.Engines.Shadowguard
 
                 foreach (DamageStore ds in rights.Where(s => s.m_HasRight))
                 {
-                    int chance = 1000 + (ds.m_Mobile.Luck / 15);
+                    int luck = ds.m_Mobile is PlayerMobile ? ((PlayerMobile)ds.m_Mobile).RealLuck : ds.m_Mobile.Luck;
+
+                    int chance = 1000 + (luck / 15);
 
                     if (chance > Utility.Random(5000))
                     {

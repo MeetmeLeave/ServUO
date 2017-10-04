@@ -106,6 +106,19 @@ namespace Server.Items
         {
         }
 
+        public override void OnAfterDuped(Item newItem)
+        {
+            Food food = newItem as Food;
+
+            if (food == null)
+                return;
+
+            food.PlayerConstructed = m_PlayerConstructed;
+            food.Poisoner = m_Poisoner;
+            food.Poison = m_Poison;
+            food.Quality = _Quality;
+        }
+
         public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool, CraftItem craftItem, int resHue)
         {
             Quality = (ItemQuality)quality;
@@ -142,12 +155,9 @@ namespace Server.Items
             }
         }
 
-        public override bool StackWith(Mobile from, Item dropped, bool playSound)
+        public override bool WillStack(Mobile from, Item dropped)
         {
-            if (dropped is Food && ((Food)dropped).PlayerConstructed == PlayerConstructed)
-                return base.StackWith(from, dropped, playSound);
-            else
-                return false;
+            return dropped is Food && ((Food)dropped).PlayerConstructed == PlayerConstructed && base.WillStack(from, dropped);
         }
 
 		public override void AddNameProperty(ObjectPropertyList list)
@@ -156,7 +166,7 @@ namespace Server.Items
 
 			if (!String.IsNullOrEmpty(EngravedText))
 			{
-				list.Add(1072305, EngravedText); // Engraved: ~1_INSCRIPTION~
+				list.Add(1072305, Utility.FixHtml(EngravedText)); // Engraved: ~1_INSCRIPTION~
 			}
 		}
 
@@ -169,7 +179,16 @@ namespace Server.Items
                 from.PlaySound(Utility.Random(0x3A, 3));
 
                 if (from.Body.IsHuman && !from.Mounted)
-                    from.Animate(34, 5, 1, true, false, 0);
+                {
+                    if (Core.SA)
+                    {
+                        from.Animate(AnimationType.Eat, 0);
+                    }
+                    else
+                    {
+                        from.Animate(34, 5, 1, true, false, 0);
+                    }
+                }
 
                 if (m_Poison != null)
                     from.ApplyPoison(m_Poisoner, m_Poison);
