@@ -45,7 +45,7 @@ namespace Server.Engines.Craft
 
     public class AlterItem
     {
-        public static void BeginTarget(Mobile from, CraftSystem system, BaseTool tool)
+        public static void BeginTarget(Mobile from, CraftSystem system, ITool tool)
         {
             from.Target = new AlterItemTarget(system, tool);
             from.SendLocalizedMessage(1094730); //Target the item to altar
@@ -61,7 +61,7 @@ namespace Server.Engines.Craft
     public class AlterItemTarget : Target
     {
         private readonly CraftSystem m_System;
-        private readonly BaseTool m_Tool;
+        private readonly ITool m_Tool;
         private Item m_Contract;
 
         public AlterItemTarget(CraftSystem system, Item contract)
@@ -71,7 +71,7 @@ namespace Server.Engines.Craft
             m_Contract = contract;
         }
 
-        public AlterItemTarget(CraftSystem system, BaseTool tool)
+        public AlterItemTarget(CraftSystem system, ITool tool)
             : base(1, false, TargetFlags.None)
         {
             this.m_System = system;
@@ -172,13 +172,9 @@ namespace Server.Engines.Craft
                     number = 1094793;
                 }
             }
-            else if (!Server.SkillHandlers.Imbuing.CheckSoulForge(from, 2, false))
+            else if (!Server.SkillHandlers.Imbuing.CheckSoulForge(from, 2, false, false))
             {
                 number = 1111867; // You must be near a soulforge to alter an item.
-            }
-            else if (!Server.SkillHandlers.Imbuing.CheckQueen(from))
-            {
-                number = 1113736; // You must rise to the rank of noble in the eyes of the Gargoyle Queen before her majesty will allow you to use this soulforge.
             }
             else if (m_Contract == null && value < 100.0)
             {
@@ -282,10 +278,10 @@ namespace Server.Engines.Craft
                 {
                     newitem.Name = origItem.Name;
                 }
-                else if (Server.Engines.VendorSearhing.VendorSearch.StringList != null)
+                else if (Server.Engines.VendorSearching.VendorSearch.StringList != null)
                 {
                     if (origItem.LabelNumber > 0 && RetainsName(origItem))
-                        newitem.Name = Server.Engines.VendorSearhing.VendorSearch.StringList.GetString(origItem.LabelNumber);
+                        newitem.Name = Server.Engines.VendorSearching.VendorSearch.StringList.GetString(origItem.LabelNumber);
                 }
 
                 newitem.Hue = origItem.Hue;

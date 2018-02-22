@@ -20,6 +20,14 @@ using Server.Misc;
 
 namespace Server
 {
+    public enum DamageType
+    {
+        Melee,
+        Ranged,
+        Spell,
+        SpellAOE
+    }
+
     public class AOS
     {
         public static void DisableStatInfluences()
@@ -47,30 +55,45 @@ namespace Server
 
         public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy)
         {
-            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, false, false, false);
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, false);
         }
 
         public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos)
         {
-            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, 0, false, false, false);
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, 0, false);
         }
 
         public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct)
         {
-            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, direct, false, false, false);
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, direct, false);
         }
 
         public static int Damage(IDamageable m, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy)
         {
-            return Damage(m, from, damage, ignoreArmor, phys, fire, cold, pois, nrgy, 0, 0, false, false, false);
+            return Damage(m, from, damage, ignoreArmor, phys, fire, cold, pois, nrgy, 0, 0, false);
         }
 
         public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, bool keepAlive)
         {
-            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, keepAlive, false, false);
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, keepAlive);
         }
 
-        public static int Damage(IDamageable damageable, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, bool keepAlive, bool archer, bool deathStrike)
+        public static int Damage(IDamageable m, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, bool keepAlive, bool archer, bool deathStrike)
+        {
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, direct, keepAlive, archer ? DamageType.Ranged : DamageType.Melee); // old deathStrike damage, kept for compatibility
+        }
+
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, DamageType type)
+        {
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, false, type);
+        }
+
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, DamageType type)
+        {
+            return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, direct, false, type);
+        }
+
+        public static int Damage(IDamageable damageable, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, bool keepAlive, DamageType type = DamageType.Melee)
         {
             Mobile m = damageable as Mobile;
 
@@ -131,9 +154,10 @@ namespace Server
                 }
             }
 
+            bool ranged = type == DamageType.Ranged;
             BaseQuiver quiver = null;
 
-            if (archer && from != null)
+            if (ranged && from.Race != Race.Gargoyle)
                 quiver = from.FindItemOnLayer(Layer.Cloak) as BaseQuiver;
 
             int totalDamage;
@@ -160,18 +184,20 @@ namespace Server
                 if (m != null)
                     BaseFishPie.ScaleDamage(m, ref totalDamage, phys, fire, cold, pois, nrgy, direct);
 
+                if (Core.HS && ArmorPierce.IsUnderEffects(m))
+                {
+                    totalDamage += (int)((double)totalDamage * .1);
+                }
+
                 if (totalDamage < 1)
-                    totalDamage = 1;
+                    totalDamage = 1;           
             }
-            else if (Core.ML && m is PlayerMobile && from is PlayerMobile)
+            else if (Core.ML && m is PlayerMobile)
             {
                 if (quiver != null)
                     damage += damage * quiver.DamageIncrease / 100;
 
-                if (!deathStrike)
-                    totalDamage = Math.Min(damage, Core.TOL && archer ? 30 : 35);	// Direct Damage cap of 30/35
-                else
-                    totalDamage = Math.Min(damage, 70);	// Direct Damage cap of 70
+                totalDamage = Math.Min(damage, Core.TOL && ranged ? 30 : 35);	// Direct Damage cap of 30/35
             }
             else
             {
@@ -188,36 +214,58 @@ namespace Server
                 return totalDamage;
             }
 
-            #region Evil Omen and Blood Oath
+            #region Evil Omen, Blood Oath and reflect physical
             if (EvilOmenSpell.TryEndEffect(m))
             {
                 totalDamage = (int)(totalDamage * 1.25);
             }
 
-            if (from != null)
+            if (from != null && !from.Deleted && from.Alive && !from.IsDeadBondedPet)
             {
                 Mobile oath = BloodOathSpell.GetBloodOath(from);
 
                 /* Per EA's UO Herald Pub48 (ML):
                 * ((resist spellsx10)/20 + 10=percentage of damage resisted)
+                * 
+                * Tested 12/29/2017-
+                * No cap, also, above forumula is only in effect vs. creatures
                 */
 
                 if (oath == m)
                 {
-                    totalDamage = (int)(totalDamage * 1.1);
+                    int originalDamage = totalDamage;
+                    totalDamage = (int)(totalDamage * 1.2);
 
-                    if (totalDamage > 35 && from is PlayerMobile) /* capped @ 35, seems no expansion */
+                    if (!Core.TOL && totalDamage > 35 && from is PlayerMobile) /* capped @ 35, seems no expansion */
                     {
                         totalDamage = 35;
                     }
 
-                    if (Core.ML)
+                    if (Core.ML && m is BaseCreature)
                     {
-                        from.Damage((int)(totalDamage * (1 - (((from.Skills.MagicResist.Value * .5) + 10) / 100))), m);
+                        from.Damage((int)(originalDamage * (1 - (((from.Skills.MagicResist.Value * .5) + 10) / 100))), m);
                     }
                     else
                     {
-                        from.Damage(totalDamage, m);
+                        from.Damage(originalDamage, m);
+                    }
+                }
+                else if (!ignoreArmor)
+                {
+                    int reflectPhys = Math.Min(105, AosAttributes.GetValue(m, AosAttribute.ReflectPhysical));
+
+                    if (reflectPhys != 0)
+                    {
+                        if (from is ExodusMinion && ((ExodusMinion)from).FieldActive || from is ExodusOverseer && ((ExodusOverseer)from).FieldActive)
+                        {
+                            from.FixedParticles(0x376A, 20, 10, 0x2530, EffectLayer.Waist);
+                            from.PlaySound(0x2F4);
+                            m.SendAsciiMessage("Your weapon cannot penetrate the creature's magical barrier");
+                        }
+                        else
+                        {
+                            from.Damage(Scale((damage * phys * (100 - (ignoreArmor ? 0 : m.PhysicalResistance))) / 10000, reflectPhys), m);
+                        }
                     }
                 }
             }
@@ -261,40 +309,38 @@ namespace Server
                 SwarmContext.CheckRemove(m);
             #endregion
 
+            #region Skill Mastery
+            SkillMasterySpell.OnDamage(m, from, type, ref totalDamage);
+            #endregion
+
             if (keepAlive && totalDamage > m.Hits)
                 totalDamage = m.Hits;
 
             SpiritualityVirtue.GetDamageReduction(m, ref totalDamage);
 
-            if (from != null && !from.Deleted && from.Alive)
-            {
-                int reflectPhys = Math.Min(105, AosAttributes.GetValue(m, AosAttribute.ReflectPhysical));
-
-                if (reflectPhys != 0)
-                {
-                    if (from is ExodusMinion && ((ExodusMinion)from).FieldActive || from is ExodusOverseer && ((ExodusOverseer)from).FieldActive)
-                    {
-                        from.FixedParticles(0x376A, 20, 10, 0x2530, EffectLayer.Waist);
-                        from.PlaySound(0x2F4);
-                        m.SendAsciiMessage("Your weapon cannot penetrate the creature's magical barrier");
-                    }
-                    else
-                    {
-                        from.Damage(Scale((damage * phys * (100 - (ignoreArmor ? 0 : m.PhysicalResistance))) / 10000, reflectPhys), m);
-                    }
-                }
-            }
-
             #region Berserk
             BestialSetHelper.OnDamage(m, from, ref totalDamage);
             #endregion
 
-            m.Damage(totalDamage, from, true, false);
+            if (type == DamageType.Spell && m != null && Feint.Registry.ContainsKey(m) && Feint.Registry[m].Enemy == from)
+                totalDamage -= (int)((double)damage * ((double)Feint.Registry[m].DamageReduction / 100));
 
-            #region Skill Mastery Spells
-            ManaShieldSpell.CheckManaShield(m, ref totalDamage);
-            SkillMasterySpell.OnDamaged(m, from, ref totalDamage);
-            #endregion
+            if (m.Hidden && Core.ML && type >= DamageType.Spell)
+            {
+                int chance = (int)Math.Min(33, 100 - (Server.Spells.SkillMasteries.ShadowSpell.GetDifficultyFactor(m) * 100));
+
+                if (Utility.Random(100) < chance)
+                {
+                    m.RevealingAction();
+                    m.NextSkillTime = Core.TickCount + (12000 - ((int)m.Skills[SkillName.Hiding].Value) * 100);
+                }
+            }
+
+            if (from != null)
+                DoLeech(totalDamage, from, m);
+
+            m.Damage(totalDamage, from, true, false);
+            SpiritSpeak.CheckDisrupt(m);
 
             #region Stygian Abyss
             if (m.Spell != null)
@@ -304,6 +350,8 @@ namespace Server
 
             if (ManaPhasingOrb.IsInManaPhase(m))
                 ManaPhasingOrb.RemoveFromTable(m);
+
+            SoulChargeContext.CheckHit(from, m, totalDamage);
 
             Spells.Mysticism.SleepSpell.OnDamage(m);
             Spells.Mysticism.PurgeMagicSpell.OnMobileDoDamage(from);
@@ -321,6 +369,42 @@ namespace Server
         public static int Scale(int input, int percent)
         {
             return (input * percent) / 100;
+        }
+
+        public static void DoLeech(int damageGiven, Mobile from, Mobile target)
+        {
+            TransformContext context = TransformationSpellHelper.GetContext(from);
+
+            if (context != null)
+            {
+                if (context.Type == typeof(WraithFormSpell))
+                {
+                    int manaLeech = AOS.Scale(damageGiven, Math.Min(target.Mana, (5 + (int)((15 * from.Skills.SpiritSpeak.Value) / 100)))); // Wraith form gives 5-20% mana leech
+
+                    if (manaLeech != 0)
+                    {
+                        from.Mana += manaLeech;
+                        from.PlaySound(0x44D);
+
+                        target.Mana -= manaLeech;
+                    }
+                }
+                else if (context.Type == typeof(VampiricEmbraceSpell))
+                {
+                    #region High Seas
+                    if (target is BaseCreature && ((BaseCreature)target).TaintedLifeAura)
+                    {
+                        AOS.Damage(from, target, AOS.Scale(damageGiven, 20), false, 0, 0, 0, 0, 0, 0, 100, false, false, false);
+                        from.SendLocalizedMessage(1116778); //The tainted life force energy damages you as your body tries to absorb it.
+                    }
+                    #endregion
+                    else
+                    {
+                        from.Hits += AOS.Scale(damageGiven, 20);
+                        from.PlaySound(0x44D);
+                    }
+                }
+            }
         }
 
         #region AOS Status Bar
@@ -472,85 +556,35 @@ namespace Server
             if (!Core.AOS)
                 return 0;
 
-            List<Item> items = m.Items;
             int value = 0;
 
             #region Enhancement
             value += Enhancement.GetValue(m, attribute);
             #endregion
 
-            for (int i = 0; i < items.Count; ++i)
+            for (int i = 0; i < m.Items.Count; ++i)
             {
-                Item obj = items[i];
+                Item obj = m.Items[i];
 
-                if (obj is BaseWeapon)
+                AosAttributes attrs = RunicReforging.GetAosAttributes(obj);
+
+                if (attrs != null)
+                    value += attrs[attribute];
+
+                if (attribute == AosAttribute.Luck)
                 {
-                    AosAttributes attrs = ((BaseWeapon)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-
-                    if (attribute == AosAttribute.Luck)
+                    if (obj is BaseWeapon)
                         value += ((BaseWeapon)obj).GetLuckBonus();
-                }
-                else if (obj is BaseArmor)
-                {
-                    AosAttributes attrs = ((BaseArmor)obj).Attributes;
 
-                    if (attrs != null)
-                        value += attrs[attribute];
-
-                    if (attribute == AosAttribute.Luck)
+                    if (obj is BaseArmor)
                         value += ((BaseArmor)obj).GetLuckBonus();
-                }
-                else if (obj is BaseJewel)
-                {
-                    AosAttributes attrs = ((BaseJewel)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is BaseClothing)
-                {
-                    AosAttributes attrs = ((BaseClothing)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is Spellbook)
-                {
-                    AosAttributes attrs = ((Spellbook)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is FishingPole)
-                {
-                    AosAttributes attrs = ((FishingPole)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is BaseQuiver)
-                {
-                    AosAttributes attrs = ((BaseQuiver)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is BaseTalisman)
-                {
-                    AosAttributes attrs = ((BaseTalisman)obj).Attributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
                 }
 
                 if (obj is ISetItem)
                 {
                     ISetItem item = (ISetItem)obj;
 
-                    AosAttributes attrs = item.SetAttributes;
+                    attrs = item.SetAttributes;
 
                     if (attrs != null && item.LastEquipped)
                         value += attrs[attribute];
@@ -591,9 +625,6 @@ namespace Server
                     value -= 30;
 
                 #region SA
-                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mysticism.StoneFormSpell)))
-                    value -= 10;
-
                 if (m is PlayerMobile && m.Race == Race.Gargoyle)
                 {
                     value += ((PlayerMobile)m).GetRacialBerserkBuff(false);
@@ -617,6 +648,8 @@ namespace Server
 
                 if (context != null && context.Spell is ReaperFormSpell)
                     value += ((ReaperFormSpell)context.Spell).SpellDamageBonus;
+
+                value += ArcaneEmpowermentSpell.GetSpellBonus(m, true);
 
                 #region SA
                 if (m is PlayerMobile && m.Race == Race.Gargoyle)
@@ -677,9 +710,6 @@ namespace Server
                     value += DivineFurySpell.GetWeaponSpeedBonus(m);
 
                 value += HonorableExecution.GetSwingBonus(m);
-
-                if (DualWield.Registry.Contains(m))
-                    value += ((DualWield.DualWieldTimer)DualWield.Registry[m]).BonusSwingSpeed;
 
                 TransformContext context = TransformationSpellHelper.GetContext(m);
 
@@ -761,8 +791,7 @@ namespace Server
                 if (DivineFurySpell.UnderEffect(m))
                     value -= DivineFurySpell.GetDefendMalus(m);
 
-                if (HitLower.IsUnderDefenseEffect(m))
-                    value -= 25; // Under Hit Lower Defense effect -> 25% malus
+                value -= HitLower.GetDefenseMalus(m);
 
                 int discordanceEffect = 0;
                 int surpriseMalus = 0;
@@ -1328,33 +1357,18 @@ namespace Server
             if (!Core.AOS)
                 return 0;
 
-            List<Item> items = m.Items;
             int value = 0;
 
             #region Enhancement
             value += Enhancement.GetValue(m, attribute);
             #endregion
 
-            for (int i = 0; i < items.Count; ++i)
+            for (int i = 0; i < m.Items.Count; i++)
             {
-                Item obj = items[i];
+                AosWeaponAttributes attrs = RunicReforging.GetAosWeaponAttributes(m.Items[i]);
 
-                if (obj is BaseWeapon)
-                {
-                    AosWeaponAttributes attrs = ((BaseWeapon)obj).WeaponAttributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                #region Mondain's Legacy
-                else if (obj is Glasses)
-                {
-                    AosWeaponAttributes attrs = ((Glasses)obj).WeaponAttributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                #endregion
+                if (attrs != null)
+                    value += attrs[attribute];
             }
 
             return value;
@@ -1877,16 +1891,15 @@ namespace Server
             if (!Core.AOS)
                 return 0;
 
-            List<Item> items = m.Items;
             int value = 0;
 
             #region Enhancement
             value += Enhancement.GetValue(m, attribute);
             #endregion
 
-            for (int i = 0; i < items.Count; ++i)
+            for (int i = 0; i < m.Items.Count; ++i)
             {
-                Item obj = items[i];
+                Item obj = m.Items[i];
 
                 if (obj is BaseWeapon)
                 {
@@ -2031,27 +2044,14 @@ namespace Server
             if (!Core.AOS)
                 return 0;
 
-            List<Item> items = m.Items;
             int value = 0;
 
-            for (int i = 0; i < items.Count; ++i)
+            for (int i = 0; i < m.Items.Count; ++i)
             {
-                Item obj = items[i];
+                AosArmorAttributes attrs = RunicReforging.GetAosArmorAttributes(m.Items[i]);
 
-                if (obj is BaseArmor)
-                {
-                    AosArmorAttributes attrs = ((BaseArmor)obj).ArmorAttributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else if (obj is BaseClothing)
-                {
-                    AosArmorAttributes attrs = ((BaseClothing)obj).ClothingAttributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
+                if (attrs != null)
+                    value += attrs[attribute];
             }
 
             return value;
@@ -2574,32 +2574,18 @@ namespace Server
             if (!Core.AOS)
                 return 0;
 
-            List<Item> items = m.Items;
             int value = 0;
 
             #region Enhancement
             value += Enhancement.GetValue(m, attribute);
             #endregion
 
-            for (int i = 0; i < items.Count; ++i)
+            for (int i = 0; i < m.Items.Count; ++i)
             {
-                Item obj = items[i];
+                SAAbsorptionAttributes attrs = RunicReforging.GetSAAbsorptionAttributes(m.Items[i]);
 
-                if (obj is BaseArmor)
-                {
-                    SAAbsorptionAttributes attrs = ((BaseArmor)obj).AbsorptionAttributes;
-
-                    if (attrs != null)
-                        value += attrs[attribute];
-                }
-                else
-                    if (obj is BaseWeapon)
-                    {
-                        SAAbsorptionAttributes attrs = ((BaseWeapon)obj).AbsorptionAttributes;
-
-                        if (attrs != null)
-                            value += attrs[attribute];
-                    }
+                if (attrs != null)
+                    value += attrs[attribute];
             }
 
             value += SkillMasterySpell.GetAttributeBonus(m, attribute);
@@ -3029,6 +3015,9 @@ namespace Server
 
         public void GetProperties(ObjectPropertyList list, Item item)
         {
+            if (NoRepair > 0)
+                list.Add(1151782);
+
             if (Brittle > 0 ||
                 item is BaseWeapon && ((BaseWeapon)item).Attributes.Brittle > 0 ||
                 item is BaseArmor && ((BaseArmor)item).Attributes.Brittle > 0 ||
@@ -3047,9 +3036,6 @@ namespace Server
 
             if (Antique > 0)
                 list.Add(1076187);
-
-            if (NoRepair > 0)
-                list.Add(1151782);
         }
 
         public const double CombatDecayChance = 0.02;

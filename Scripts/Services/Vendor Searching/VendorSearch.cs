@@ -12,7 +12,7 @@ using Server.Targeting;
 using System.Text.RegularExpressions;
 using Server.Regions;
 
-namespace Server.Engines.VendorSearhing
+namespace Server.Engines.VendorSearching
 {
 	public class VendorSearch
 	{
@@ -372,22 +372,7 @@ namespace Server.Engines.VendorSearhing
         {
             NegativeAttributes neg = RunicReforging.GetNegativeAttributes(item);
 
-            if (neg != null && neg.NoRepair != 0)
-                return false;
-
-            if (item is BaseWeapon && ((BaseWeapon)item).BlockRepair)
-                return false;
-
-            if (item is BaseArmor && ((BaseArmor)item).BlockRepair)
-                return false;
-
-            if (item is BaseJewel && ((BaseJewel)item).BlockRepair)
-                return false;
-
-            if (item is BaseClothing && ((BaseClothing)item).BlockRepair)
-                return false;
-
-            return true;
+            return neg != null && neg.NoRepair != 0;
         }
 
         private static bool CheckKeyword(string searchstring, Item item)

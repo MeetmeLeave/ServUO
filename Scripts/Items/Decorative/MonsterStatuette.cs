@@ -64,7 +64,11 @@ namespace Server.Items
         FleshRenderer,
         CrystalElemental,
         DarkFather,
-        PlatinumDragon
+        PlatinumDragon,
+        TRex,
+        Zipactriotal,
+        MyrmidexQueen,
+        Virtuebane
     }
 
     public class MonsterStatuetteInfo
@@ -130,6 +134,10 @@ namespace Server.Items
             /* Crystal Elemental */ new MonsterStatuetteInfo(1155747, 0x2620, 278),
             /* Dark Father */       new MonsterStatuetteInfo(1155748, 0x2632, 0x165),
             /* Platinum Dragon */   new MonsterStatuetteInfo(1155745, 0x2635, new int[] { 0x2C1, 0x2C3 }),
+            /* TRex */              new MonsterStatuetteInfo(1157078, 0x9DED, 278),
+            /* Zipactriotl */       new MonsterStatuetteInfo(1157079, 0x9DE4, 609),
+            /* Myrmidex Queen */    new MonsterStatuetteInfo(1157080, 0x9DB6, 959),
+            /* Virtuebane */        new MonsterStatuetteInfo(1153592, 0x4C06, 357),
         };
 
         private readonly int m_LabelNumber;

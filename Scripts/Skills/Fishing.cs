@@ -70,7 +70,7 @@ namespace Server.Engines.Harvest
             fish.ConsumedPerFeluccaHarvest = 1;
 
             // The fishing
-            fish.EffectActions = new int[] { 12 };
+            fish.EffectActions = new int[] { Core.SA ? 6 : 12 };
             fish.EffectSounds = new int[0];
             fish.EffectCounts = new int[] { 1 };
             fish.EffectDelay = TimeSpan.Zero;
@@ -194,40 +194,32 @@ namespace Server.Engines.Harvest
                     }
                 }
 
-                foreach (BaseQuest quest in player.Quests)
+                if (from.Region.IsPartOf("Underworld"))
                 {
-                    if (quest is SomethingFishy)
+                    foreach (BaseQuest quest in player.Quests)
                     {
-                        if (Utility.RandomDouble() < 0.1 && (from.Region != null && from.Region.IsPartOf("AbyssEntrance")))
+                        if (quest is SomethingFishy && Utility.RandomDouble() < 0.1)
                         {
                             Item red = new RedHerring();
-                            pack.AddItem(red);
+                            from.AddToBackpack(red);
                             player.SendLocalizedMessage(1095047, "", 0x23); // You pull a shellfish out of the water, but it doesn't have a rainbow pearl.
-                            break;
+                            return true;
                         }
-                        return true;
-                    }
 
-                    if (quest is ScrapingtheBottom)
-                    {
-                        if (Utility.RandomDouble() < 0.1 && (from.Region != null && from.Region.IsPartOf("AbyssEntrance")))
+                        if (quest is ScrapingtheBottom && Utility.RandomDouble() < 0.1)
                         {
                             Item mug = new MudPuppy();
-                            pack.AddItem(mug);
+                            from.AddToBackpack(mug);
                             player.SendLocalizedMessage(1095064, "", 0x23); // You pull a shellfish out of the water, but it doesn't have a rainbow pearl.
-                            break;
+                            return true;
                         }
-                        return true;
                     }
                 }
 
                 #region High Seas Charydbis
                 if (Core.HS && tool is FishingPole && CharydbisSpawner.SpawnInstance != null && CharydbisSpawner.SpawnInstance.IsSummoned)
                 {
-                    if (pack == null)
-                        return false;
-
-                    Item oracle = pack.FindItemByType(typeof(OracleOfTheSea));
+                    Item oracle = from.Backpack.FindItemByType(typeof(OracleOfTheSea));
                     FishingPole pole = tool as FishingPole;
                     CharydbisSpawner sp = CharydbisSpawner.SpawnInstance;
 
@@ -266,7 +258,7 @@ namespace Server.Engines.Harvest
             if (FishInfo.IsRareFish(type))
                 return type;
 
-            bool deepWater = SpecialFishingNet.FullValidation(map, loc.X, loc.Y);
+            bool deepWater = Items.SpecialFishingNet.ValidateDeepWater(map, loc.X, loc.Y);
             bool junkproof = HasTypeHook(tool, HookType.JunkProof); 
 
             double skillBase = from.Skills[SkillName.Fishing].Base;
@@ -1016,6 +1008,20 @@ namespace Server.Engines.Harvest
             }
             else
                 base.FinishHarvesting(from, tool, def, toHarvest, locked);
+        }
+
+        public override bool CheckHarvestSkill(Map map, Point3D loc, Mobile from, HarvestResource res, HarvestDefinition def)
+        {
+            bool deepWater = SpecialFishingNet.ValidateDeepWater(map, loc.X, loc.Y);
+            double value = from.Skills[SkillName.Fishing].Value;
+
+            if (deepWater && value < 75.0) // can't fish here yet
+                return from.Skills[def.Skill].Value >= res.ReqSkill;
+
+            if (!deepWater && value >= 75.0) // you can fish, but no gains!
+                return true;
+
+            return base.CheckHarvestSkill(map, loc, from, res, def);
         }
 
         public Type GetSpecialLavaItem(Mobile from, Item type, Map map, Point3D pnt, object toHarvest)

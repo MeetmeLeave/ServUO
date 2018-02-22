@@ -86,7 +86,6 @@ namespace Server.Items
         private int m_PhysicalBonus, m_FireBonus, m_ColdBonus, m_PoisonBonus, m_EnergyBonus;
 
         #region Runic Reforging
-        private bool m_BlockRepair;
         private ItemPower m_ItemPower;
         private ReforgedPrefix m_ReforgedPrefix;
         private ReforgedSuffix m_ReforgedSuffix;
@@ -677,17 +676,10 @@ namespace Server.Items
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public ReforgedSuffix ReforgedSuffix 
-        { 
-            get { return m_ReforgedSuffix; }
-            set { m_ReforgedSuffix = value; InvalidateProperties(); } 
-        }
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public bool BlockRepair
+        public ReforgedSuffix ReforgedSuffix
         {
-            get { return m_BlockRepair; }
-            set { m_BlockRepair = value; InvalidateProperties(); }
+            get { return m_ReforgedSuffix; }
+            set { m_ReforgedSuffix = value; InvalidateProperties(); }
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
@@ -823,7 +815,7 @@ namespace Server.Items
             }
             set
             {
-                if (m_Resource != value)
+                if (m_Resource != value || m_Resource == DefaultResource)
                 {
                     UnscaleDurability();
                     CraftResource old = m_Resource;
@@ -1282,81 +1274,6 @@ namespace Server.Items
             }
         }
 
-        public void DistributeBonuses(int amount)
-        {
-            for (int i = 0; i < amount; ++i)
-            {
-                switch ( Utility.Random(5) )
-                {
-                    case 0:
-                        ++m_PhysicalBonus;
-                        break;
-                    case 1:
-                        ++m_FireBonus;
-                        break;
-                    case 2:
-                        ++m_ColdBonus;
-                        break;
-                    case 3:
-                        ++m_PoisonBonus;
-                        break;
-                    case 4:
-                        ++m_EnergyBonus;
-                        break;
-                }
-            }
-
-            InvalidateProperties();
-        }
-
-        private void ApplyResourceResistances(CraftResource oldResource)
-        {
-            CraftAttributeInfo info;
-
-            if (oldResource > CraftResource.None)
-            {
-                info = GetResourceAttrs(oldResource);
-
-                // Remove old bonus
-                m_PhysicalBonus = Math.Max(0, m_PhysicalBonus - info.ArmorPhysicalResist);
-                m_FireBonus = Math.Max(0, m_FireBonus - info.ArmorFireResist);
-                m_ColdBonus = Math.Max(0, m_ColdBonus - info.ArmorColdResist);
-                m_PoisonBonus = Math.Max(0, m_PoisonBonus - info.ArmorPoisonResist);
-                m_EnergyBonus = Math.Max(0, m_EnergyBonus - info.ArmorEnergyResist);
-
-                m_PhysNonImbuing = Math.Max(0, PhysNonImbuing - info.ArmorPhysicalResist);
-                m_FireNonImbuing = Math.Max(0, m_FireNonImbuing - info.ArmorFireResist);
-                m_ColdNonImbuing = Math.Max(0, m_ColdNonImbuing - info.ArmorColdResist);
-                m_PoisonNonImbuing = Math.Max(0, m_PoisonNonImbuing - info.ArmorPoisonResist);
-                m_EnergyNonImbuing = Math.Max(0, m_EnergyNonImbuing - info.ArmorEnergyResist);
-            }
-
-            info = GetResourceAttrs(m_Resource);
-
-            // add new bonus
-            m_PhysicalBonus += info.ArmorPhysicalResist;
-            m_FireBonus += info.ArmorFireResist;
-            m_ColdBonus += info.ArmorColdResist;
-            m_PoisonBonus += info.ArmorPoisonResist;
-            m_EnergyBonus += info.ArmorEnergyResist;
-
-            m_PhysNonImbuing += info.ArmorPhysicalResist;
-            m_FireNonImbuing += info.ArmorFireResist;
-            m_ColdNonImbuing += info.ArmorColdResist;
-            m_PoisonNonImbuing += info.ArmorPoisonResist;
-            m_EnergyNonImbuing += info.ArmorEnergyResist;
-        }
-
-        public CraftAttributeInfo GetResourceAttrs(CraftResource res)
-        {
-            CraftResourceInfo info = CraftResources.GetInfo(res);
-
-            if (info == null)
-                return CraftAttributeInfo.Blank;
-
-            return info.AttributeInfo;
-        }
-
         public int GetProtOffset()
         {
             switch ( m_Protection )
@@ -1702,9 +1619,10 @@ namespace Server.Items
         {
             base.Serialize(writer);
 
-            writer.Write((int)13); // version
+            writer.Write((int)14); // version
 
-            writer.Write(_VvVItem);
+            // Version 14 - removed VvV Item (handled in VvV System) and BlockRepair (Handled as negative attribute)
+
             writer.Write(_Owner);
             writer.Write(_OwnerName);
 
@@ -1723,7 +1641,6 @@ namespace Server.Items
             writer.Write((int)m_ReforgedPrefix);
             writer.Write((int)m_ReforgedSuffix);
             writer.Write((int)m_ItemPower);
-            writer.Write(m_BlockRepair);
             #endregion
 
             #region Stygian Abyss
@@ -1915,10 +1832,12 @@ namespace Server.Items
 
             switch ( version )
             {
+                case 14:
                 case 13:
                 case 12:
                     {
-                        _VvVItem = reader.ReadBool();
+                        if (version == 13)
+                            reader.ReadBool();
                         _Owner = reader.ReadMobile();
                         _OwnerName = reader.ReadString();
                         goto case 11;
@@ -1943,7 +1862,13 @@ namespace Server.Items
                         m_ReforgedPrefix = (ReforgedPrefix)reader.ReadInt();
                         m_ReforgedSuffix = (ReforgedSuffix)reader.ReadInt();
                         m_ItemPower = (ItemPower)reader.ReadInt();
-                        m_BlockRepair = reader.ReadBool();
+                        if (version == 13 && reader.ReadBool())
+                        {
+                            Timer.DelayCall(TimeSpan.FromSeconds(1), () =>
+                            {
+                                m_NegativeAttributes.NoRepair = 1;
+                            });
+                        }
                         #endregion
 
                         #region Stygian Abyss
@@ -2195,7 +2120,7 @@ namespace Server.Items
                         }
 
                         if (version < 3 && m_Quality == ItemQuality.Exceptional)
-                            DistributeBonuses(6);
+                            DistributeExceptionalBonuses(null, 6);
 
                         if (version >= 2)
                         {
@@ -2768,13 +2693,6 @@ namespace Server.Items
                     RunicReforging.AddSuffixName(list, m_ReforgedSuffix, GetNameString());
                 }
             }
-            else if (m_Quality == ItemQuality.Exceptional)
-            {
-                if (oreType != 0)
-                    list.Add(1053100, "#{0}\t{1}", oreType, GetNameString()); // exceptional ~1_oretype~ ~2_armortype~
-                else
-                    list.Add(1050040, GetNameString()); // exceptional ~1_ITEMNAME~
-            }
             else
             {
                 if (oreType != 0)
@@ -2796,17 +2714,9 @@ namespace Server.Items
 
         public virtual int GetLuckBonus()
         {
-            if (m_Resource == CraftResource.Heartwood)
-                return 0;
+            CraftAttributeInfo attrInfo = GetResourceAttrs(Resource);
 
-            CraftResourceInfo resInfo = CraftResources.GetInfo(m_Resource);
-
-            if (resInfo == null)
-                return 0;
-
-            CraftAttributeInfo attrInfo = resInfo.AttributeInfo;
-
-            if (attrInfo == null)
+            if (attrInfo == null || Resource == CraftResource.Heartwood)
                 return 0;
 
             return attrInfo.ArmorLuck;
@@ -2827,26 +2737,26 @@ namespace Server.Items
             if (OwnerName != null)
             {
                 list.Add(1153213, OwnerName);
-            }
-
-            #region Stygian Abyss
-            if (IsImbued)
-                list.Add(1080418); // (Imbued)
-
-            if (m_GorgonLenseCharges > 0)
-                list.Add(1112590, m_GorgonLenseCharges.ToString()); //Gorgon Lens Charges: ~1_val~
-            #endregion
+            }            
 
             if (m_Crafter != null)
 				list.Add(1050043, m_Crafter.TitleName); // crafted by ~1_NAME~
+
+            if (m_Quality == ItemQuality.Exceptional)
+                list.Add(1060636); // Exceptional
+           
+            if (IsImbued)
+                list.Add(1080418); // (Imbued)
 
             if (m_Altered)
                 list.Add(1111880); // Altered
 
             #region Factions
-            if (m_FactionState != null)
-                list.Add(1041350); // faction item
+            FactionEquipment.AddFactionProperties(this, list);
             #endregion
+
+            if (m_GorgonLenseCharges > 0)
+                list.Add(1112590, m_GorgonLenseCharges.ToString()); //Gorgon Lens Charges: ~1_val~         
 
             #region Mondain's Legacy Sets
             if (IsSetItem)
@@ -2974,6 +2884,9 @@ namespace Server.Items
             if (Core.ML && (prop = m_AosAttributes.IncreasedKarmaLoss) != 0)
                 list.Add(1075210, prop.ToString()); // Increased Karma Loss ~1val~%
 
+            if ((prop = m_AosArmorAttributes.SoulCharge) != 0)
+                list.Add(1113630, prop.ToString()); // Soul Charge ~1_val~%
+
             if ((prop = m_SAAbsorptionAttributes.EaterFire) != 0)
                 list.Add(1113593, prop.ToString()); // Fire Eater ~1_Val~%
 
@@ -3007,20 +2920,17 @@ namespace Server.Items
             if ((prop = m_SAAbsorptionAttributes.ResonanceKinetic) != 0)
                 list.Add(1113695, prop.ToString()); // Kinetic Resonance ~1_val~%
 
+            if((prop = m_AosArmorAttributes.ReactiveParalyze) != 0)
+                list.Add(1112364); // reactive paralyze
+
             if ((prop = m_SAAbsorptionAttributes.CastingFocus) != 0)
                 list.Add(1113696, prop.ToString()); // Casting Focus ~1_val~%
-
-			if ((prop = m_AosArmorAttributes.SoulCharge) != 0)
-				list.Add(1113630, prop.ToString()); // Soul Charge ~1_val~%
 
             if (this is SurgeShield && ((SurgeShield)this).Surge > SurgeType.None)
                 list.Add(1153098, ((SurgeShield)this).Charges.ToString());
 
             AddResistanceProperties(list);
-
-            if ((prop = GetDurabilityBonus()) > 0)
-                list.Add(1060410, prop.ToString()); // durability ~1_val~%
-
+            
             if ((prop = ComputeStatReq(StatType.Str)) > 0)
                 list.Add(1061170, prop.ToString()); // strength requirement ~1_val~
 
@@ -3036,6 +2946,8 @@ namespace Server.Items
                 list.Add(1072378); // <br>Only when full set is present:				
                 GetSetProperties(list);
             }
+
+            AddHonestyProperty(list);
 
             if (m_ItemPower != ItemPower.None)
             {
@@ -3108,7 +3020,7 @@ namespace Server.Items
 
         #region ICraftable Members
 
-        public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool, CraftItem craftItem, int resHue)
+        public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, ITool tool, CraftItem craftItem, int resHue)
         {
             Quality = (ItemQuality)quality;
 
@@ -3116,7 +3028,7 @@ namespace Server.Items
                 Crafter = from;
 
             #region Mondain's Legacy
-            if (!craftItem.ForceNonExceptional)
+            if (!Core.ML || !craftItem.ForceNonExceptional)
             {
 				if (typeRes == null)
 					typeRes = craftItem.Resources.GetAt(0).ItemType;
@@ -3137,58 +3049,7 @@ namespace Server.Items
 
             if (Quality == ItemQuality.Exceptional && !craftItem.ForceNonExceptional)
             {
-                if (!(Core.ML && this is BaseShield) && !craftItem.ForceNonExceptional)		// Guessed Core.ML removed exceptional resist bonuses from crafted shields
-                    DistributeBonuses((tool is BaseRunicTool ? 6 : Core.SE ? 15 : 14)); // Not sure since when, but right now 15 points are added, not 14.
-
-                if (Core.ML && !(this is BaseShield) && !craftItem.ForceNonExceptional)
-                {
-                    double div = Siege.SiegeShard ? 12.5 : 20;
-                    int bonus = (int)(from.Skills.ArmsLore.Value / div);
-
-                    for (int i = 0; i < bonus; i++)
-                    {
-                        switch( Utility.Random(5) )
-                        {
-                            case 0:
-                                m_PhysicalBonus++;
-                                break;
-                            case 1:
-                                m_FireBonus++;
-                                break;
-                            case 2:
-                                m_ColdBonus++;
-                                break;
-                            case 3:
-                                m_EnergyBonus++;
-                                break;
-                            case 4:
-                                m_PoisonBonus++;
-                                break;
-                        }
-                    }
-
-                    #region Stygian Abyss
-                    m_PhysNonImbuing = m_PhysicalBonus;
-                    m_FireNonImbuing = m_FireBonus;
-                    m_ColdNonImbuing = m_ColdBonus;
-                    m_PoisonNonImbuing = m_PoisonBonus;
-                    m_EnergyNonImbuing = m_EnergyBonus;
-                    #endregion
-
-                    from.CheckSkill(SkillName.ArmsLore, 0, 100);
-                }
-
-                if (m_AosArmorAttributes.MageArmor <= 0)
-                {
-                    foreach (Type type in _MageArmorTypes)
-                    {
-                        if (type == GetType())
-                        {
-                            m_AosArmorAttributes.MageArmor = 1;
-                            break;
-                        }
-                    }
-                }
+                DistributeExceptionalBonuses(from, (tool is BaseRunicTool ? 6 : Core.SE ? 15 : 14)); // Not sure since when, but right now 15 points are added, not 14.
             }
 
             if (Core.AOS && tool is BaseRunicTool && !craftItem.ForceNonExceptional)
@@ -3207,37 +3068,153 @@ namespace Server.Items
                 if (attrInfo == null)
                     return quality;
 
-                if (m_Resource != CraftResource.Heartwood)
-                {
-                    m_AosAttributes.WeaponDamage += attrInfo.ArmorDamage;
-                    m_AosAttributes.AttackChance += attrInfo.ArmorHitChance;
-                    m_AosAttributes.RegenHits += attrInfo.ArmorRegenHits;
-                }
-                else
-                {
-                    switch (Utility.Random(4))
-                    {
-                        case 0:
-                            m_AosAttributes.WeaponDamage += attrInfo.ArmorDamage;
-                            break;
-                        case 1:
-                            m_AosAttributes.AttackChance += attrInfo.ArmorHitChance;
-                            break;
-                        case 2:
-                            m_AosAttributes.Luck += attrInfo.ArmorLuck;
-                            break;
-                        case 3:
-                            m_AosArmorAttributes.LowerStatReq += attrInfo.ArmorLowerRequirements;
-                            break;
-                    }
-                }
+                DistributeMaterialBonus(attrInfo);
             }
             #endregion
 
             return quality;
         }
 
-        private Type[] _MageArmorTypes = new Type[]
+        public virtual void DistributeExceptionalBonuses(Mobile from, int amount)
+        {
+            // Exceptional Bonus
+            for (int i = 0; i < amount; ++i)
+            {
+                switch (Utility.Random(5))
+                {
+                    case 0: ++m_PhysicalBonus; break;
+                    case 1: ++m_FireBonus; break;
+                    case 2: ++m_ColdBonus; break;
+                    case 3: ++m_PoisonBonus; break;
+                    case 4: ++m_EnergyBonus; break;
+                }
+            }
+
+            // Arms Lore Bonus
+            if (Core.ML && from != null)
+            {
+                double div = Siege.SiegeShard ? 12.5 : 20;
+                int bonus = (int)(from.Skills.ArmsLore.Value / div);
+
+                for (int i = 0; i < bonus; i++)
+                {
+                    switch (Utility.Random(5))
+                    {
+                        case 0: m_PhysicalBonus++; break;
+                        case 1: m_FireBonus++; break;
+                        case 2: m_ColdBonus++; break;
+                        case 3: m_EnergyBonus++; break;
+                        case 4: m_PoisonBonus++; break;
+                    }
+                }
+
+                from.CheckSkill(SkillName.ArmsLore, 0, 100);
+            }
+
+            // Imbuing needs to keep track of what is natrual, what is imbued bonuses
+            #region Stygian Abyss
+            m_PhysNonImbuing = m_PhysicalBonus;
+            m_FireNonImbuing = m_FireBonus;
+            m_ColdNonImbuing = m_ColdBonus;
+            m_PoisonNonImbuing = m_PoisonBonus;
+            m_EnergyNonImbuing = m_EnergyBonus;
+            #endregion
+
+            // Gives MageArmor property for certain armor types
+            if (Core.SA && m_AosArmorAttributes.MageArmor <= 0 && IsMageArmorType(this))
+            {
+                m_AosArmorAttributes.MageArmor = 1;
+            }
+
+            InvalidateProperties();
+        }
+
+        protected virtual void ApplyResourceResistances(CraftResource oldResource)
+        {
+            CraftAttributeInfo info;
+
+            if (oldResource > CraftResource.None)
+            {
+                info = GetResourceAttrs(oldResource);
+
+                // Remove old bonus
+                m_PhysicalBonus = Math.Max(0, m_PhysicalBonus - info.ArmorPhysicalResist);
+                m_FireBonus = Math.Max(0, m_FireBonus - info.ArmorFireResist);
+                m_ColdBonus = Math.Max(0, m_ColdBonus - info.ArmorColdResist);
+                m_PoisonBonus = Math.Max(0, m_PoisonBonus - info.ArmorPoisonResist);
+                m_EnergyBonus = Math.Max(0, m_EnergyBonus - info.ArmorEnergyResist);
+
+                m_PhysNonImbuing = Math.Max(0, PhysNonImbuing - info.ArmorPhysicalResist);
+                m_FireNonImbuing = Math.Max(0, m_FireNonImbuing - info.ArmorFireResist);
+                m_ColdNonImbuing = Math.Max(0, m_ColdNonImbuing - info.ArmorColdResist);
+                m_PoisonNonImbuing = Math.Max(0, m_PoisonNonImbuing - info.ArmorPoisonResist);
+                m_EnergyNonImbuing = Math.Max(0, m_EnergyNonImbuing - info.ArmorEnergyResist);
+            }
+
+            info = GetResourceAttrs(m_Resource);
+            
+            // add new bonus
+            m_PhysicalBonus += info.ArmorPhysicalResist;
+            m_FireBonus += info.ArmorFireResist;
+            m_ColdBonus += info.ArmorColdResist;
+            m_PoisonBonus += info.ArmorPoisonResist;
+            m_EnergyBonus += info.ArmorEnergyResist;
+
+            m_PhysNonImbuing += info.ArmorPhysicalResist;
+            m_FireNonImbuing += info.ArmorFireResist;
+            m_ColdNonImbuing += info.ArmorColdResist;
+            m_PoisonNonImbuing += info.ArmorPoisonResist;
+            m_EnergyNonImbuing += info.ArmorEnergyResist;
+        }
+
+        public virtual void DistributeMaterialBonus(CraftAttributeInfo attrInfo)
+        {
+            if (m_Resource != CraftResource.Heartwood)
+            {
+                m_AosAttributes.WeaponDamage += attrInfo.ArmorDamage;
+                m_AosAttributes.AttackChance += attrInfo.ArmorHitChance;
+                m_AosAttributes.RegenHits += attrInfo.ArmorRegenHits;
+                //m_AosArmorAttributes.MageArmor += attrInfo.ArmorMage;
+            }
+            else
+            {
+                switch (Utility.Random(4))
+                {
+                    case 0: m_AosAttributes.WeaponDamage += attrInfo.ArmorDamage; break;
+                    case 1: m_AosAttributes.AttackChance += attrInfo.ArmorHitChance; break;
+                    //case 2: m_AosArmorAttributes.MageArmor += attrInfo.ArmorMage; break;
+                    case 2: m_AosAttributes.Luck += attrInfo.ArmorLuck; break;
+                    case 3: m_AosArmorAttributes.LowerStatReq += attrInfo.ArmorLowerRequirements; break;
+                }
+            }
+        }
+
+        public CraftAttributeInfo GetResourceAttrs(CraftResource res)
+        {
+            CraftResourceInfo info = CraftResources.GetInfo(res);
+
+            if (info == null)
+                return CraftAttributeInfo.Blank;
+
+            return info.AttributeInfo;
+        }
+
+        public static bool IsMageArmorType(BaseArmor armor)
+        {
+            Type t = armor.GetType();
+
+            foreach (Type type in _MageArmorTypes)
+            {
+                if (type == t || t.IsSubclassOf(type))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static Type[] _MageArmorTypes = new Type[]
         {
             typeof(HeavyPlateJingasa),  typeof(LightPlateJingasa),
             typeof(PlateMempo),         typeof(PlateDo),

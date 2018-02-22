@@ -1269,7 +1269,7 @@ namespace Server
 					m_Aggressors.RemoveAt(i);
 					info.Free();
 
-					if (m_NetState != null && CanSee(attacker) && Utility.InUpdateRange(m_Location, attacker.m_Location))
+					if (m_NetState != null && Utility.InUpdateRange(this, attacker) && CanSee(attacker))
 					{
 						m_NetState.Send(MobileIncoming.Create(m_NetState, this, attacker));
 					}
@@ -1293,7 +1293,7 @@ namespace Server
 					m_Aggressed.RemoveAt(i);
 					info.Free();
 
-					if (m_NetState != null && CanSee(defender) && Utility.InUpdateRange(m_Location, defender.m_Location))
+					if (m_NetState != null && Utility.InUpdateRange(this, defender) && CanSee(defender))
 					{
 						m_NetState.Send(MobileIncoming.Create(m_NetState, this, defender));
 					}
@@ -2289,142 +2289,128 @@ namespace Server
 			AggressiveAction(aggressor, false);
 		}
 
-		public virtual void AggressiveAction(Mobile aggressor, bool criminal)
-		{
-			if (aggressor == this)
-			{
-				return;
-			}
+        public virtual void AggressiveAction(Mobile aggressor, bool criminal)
+        {
+            if (aggressor == this)
+                return;
 
-			AggressiveActionEventArgs args = AggressiveActionEventArgs.Create(this, aggressor, criminal);
+            AggressiveActionEventArgs args = AggressiveActionEventArgs.Create(this, aggressor, criminal);
 
-			EventSink.InvokeAggressiveAction(args);
+            EventSink.InvokeAggressiveAction(args);
 
-			args.Free();
+            args.Free();
 
-			if (Combatant == aggressor)
-			{
-				if (m_ExpireCombatant == null)
-				{
-					m_ExpireCombatant = new ExpireCombatantTimer(this);
-				}
-				else
-				{
-					m_ExpireCombatant.Stop();
-				}
+            if (Combatant == aggressor)
+            {
+                if (m_ExpireCombatant == null)
+                    m_ExpireCombatant = new ExpireCombatantTimer(this);
+                else
+                    m_ExpireCombatant.Stop();
 
-				m_ExpireCombatant.Start();
-			}
+                m_ExpireCombatant.Start();
+            }
 
-			bool addAggressor = true;
+            bool addAggressor = true;
 
-			var list = m_Aggressors;
+            List<AggressorInfo> list = m_Aggressors;
 
-			for (int i = 0; i < list.Count; ++i)
-			{
-				AggressorInfo info = list[i];
+            for (int i = 0; i < list.Count; ++i)
+            {
+                AggressorInfo info = list[i];
 
-				if (info.Attacker == aggressor)
-				{
-					info.Refresh();
-					info.CriminalAggression = criminal;
-					info.CanReportMurder = criminal;
+                if (info.Attacker == aggressor)
+                {
+                    info.Refresh();
+                    info.CriminalAggression = criminal;
+                    info.CanReportMurder = criminal;
 
-					addAggressor = false;
-				}
-			}
+                    addAggressor = false;
+                }
+            }
 
-			list = aggressor.m_Aggressors;
+            list = aggressor.m_Aggressors;
 
-			for (int i = 0; i < list.Count; ++i)
-			{
-				AggressorInfo info = list[i];
+            for (int i = 0; i < list.Count; ++i)
+            {
+                AggressorInfo info = list[i];
 
-				if (info.Attacker == this)
-				{
-					info.Refresh();
+                if (info.Attacker == this)
+                {
+                    info.Refresh();
 
-					addAggressor = false;
-				}
-			}
+                    addAggressor = false;
+                }
+            }
 
-			bool addAggressed = true;
+            bool addAggressed = true;
 
-			list = m_Aggressed;
+            list = m_Aggressed;
 
-			for (int i = 0; i < list.Count; ++i)
-			{
-				AggressorInfo info = list[i];
+            for (int i = 0; i < list.Count; ++i)
+            {
+                AggressorInfo info = list[i];
 
-				if (info.Defender == aggressor)
-				{
-					info.Refresh();
+                if (info.Defender == aggressor)
+                {
+                    info.Refresh();
 
-					addAggressed = false;
-				}
-			}
+                    addAggressed = false;
+                }
+            }
 
-			list = aggressor.m_Aggressed;
+            list = aggressor.m_Aggressed;
 
-			for (int i = 0; i < list.Count; ++i)
-			{
-				AggressorInfo info = list[i];
+            for (int i = 0; i < list.Count; ++i)
+            {
+                AggressorInfo info = list[i];
 
-				if (info.Defender == this)
-				{
-					info.Refresh();
-					info.CriminalAggression = criminal;
-					info.CanReportMurder = criminal;
+                if (info.Defender == this)
+                {
+                    info.Refresh();
+                    info.CriminalAggression = criminal;
+                    info.CanReportMurder = criminal;
 
-					addAggressed = false;
-				}
-			}
+                    addAggressed = false;
+                }
+            }
 
-			bool setCombatant = false;
+            bool setCombatant = false;
 
-			if (addAggressor)
-			{
-				m_Aggressors.Add(AggressorInfo.Create(aggressor, this, criminal));
-				// new AggressorInfo( aggressor, this, criminal, true ) );
+            if (addAggressor)
+            {
+                m_Aggressors.Add(AggressorInfo.Create(aggressor, this, criminal)); // new AggressorInfo( aggressor, this, criminal, true ) );
 
-				if (CanSee(aggressor) && m_NetState != null)
-				{
-					m_NetState.Send(MobileIncoming.Create(m_NetState, this, aggressor));
-				}
+                if (this.CanSee(aggressor) && m_NetState != null)
+                {
+                    m_NetState.Send(MobileIncoming.Create(m_NetState, this, aggressor));
+                }
 
-				if (Combatant == null)
-				{
-					setCombatant = true;
-				}
+                if (Combatant == null)
+                    setCombatant = true;
 
-				UpdateAggrExpire();
-			}
+                UpdateAggrExpire();
+            }
 
-			if (addAggressed)
-			{
-				aggressor.m_Aggressed.Add(AggressorInfo.Create(aggressor, this, criminal));
-				// new AggressorInfo( aggressor, this, criminal, false ) );
+            if (addAggressed)
+            {
+                aggressor.m_Aggressed.Add(AggressorInfo.Create(aggressor, this, criminal)); // new AggressorInfo( aggressor, this, criminal, false ) );
 
-				if (CanSee(aggressor) && m_NetState != null)
-				{
-					m_NetState.Send(MobileIncoming.Create(m_NetState, this, aggressor));
-				}
+                if (this.CanSee(aggressor) && m_NetState != null)
+                {
+                    m_NetState.Send(MobileIncoming.Create(m_NetState, this, aggressor));
+                }
 
-				if (Combatant == null)
-				{
-					setCombatant = true;
-				}
+                if (Combatant == null)
+                    setCombatant = true;
 
-				UpdateAggrExpire();
-			}
+                UpdateAggrExpire();
+            }
 
-			if (setCombatant)
-			{
-				Combatant = aggressor;
-			}
+            if (setCombatant && !Hidden)
+                Combatant = aggressor;
 
-			Region.OnAggressed(aggressor, this, criminal);
-		}
+            Region.OnAggressed(aggressor, this, criminal);
+        }
 
 		public void RemoveAggressed(Mobile aggressed)
 		{
@@ -4225,6 +4211,8 @@ namespace Server
 				Effects.PlaySound(this, Map, sound);
 			}
 
+            RevealingAction();
+
 			if (!m_Player)
 			{
 				Delete();
@@ -4619,7 +4607,7 @@ namespace Server
 							Map fixMap = item.Map;
 							bool shouldFix = (item.Parent == null);
 
-							item.RecordBounce(oldStack);
+							item.RecordBounce(this, oldStack);
 							item.OnItemLifted(from, item);
 							item.Internalize();
 
@@ -7220,7 +7208,7 @@ namespace Server
 					{
 						Mobile m = (Mobile)o;
 
-						if (m != this && Utility.InUpdateRange(m_Location, m.m_Location))
+						if (m != this && Utility.InUpdateRange(m, m_Location, m.m_Location))
 						{
 							ns.Send(m.RemovePacket);
 						}
@@ -7239,6 +7227,11 @@ namespace Server
 				eable.Free();
 			}
 		}
+
+        public virtual bool SendSpeedControl(SpeedControlType type)
+        {
+            return Send(new SpeedControl(type));
+        }
 
 		public bool Send(Packet p)
 		{
@@ -7470,7 +7463,7 @@ namespace Server
 		/// </summary>
 		public virtual void OnSpeech(SpeechEventArgs e)
 		{ }
-
+		
 		public void SendEverything()
 		{
 			NetState ns = m_NetState;
@@ -7478,14 +7471,14 @@ namespace Server
 			if (m_Map != null && ns != null)
 			{
 				var eable = m_Map.GetObjectsInRange(m_Location, ns.UpdateRange);
-                
-				foreach (IEntity o in eable)
+
+				foreach (var o in eable)
 				{
 					if (o is Item)
 					{
 						Item item = (Item)o;
 
-						if (CanSee(item) && InRange(item.Location, item.GetUpdateRange(this)))
+						if (InRange(item.GetWorldLocation(), item.GetUpdateRange(this)) && CanSee(item))
 						{
 							item.SendInfoTo(ns);
 						}
@@ -7494,23 +7487,19 @@ namespace Server
 					{
 						Mobile m = (Mobile)o;
 
-						if (CanSee(m) && Utility.InUpdateRange(m_Location, m.m_Location))
+						if (CanSee(m))
 						{
 							ns.Send(MobileIncoming.Create(ns, this, m));
 
-							if (ns.StygianAbyss)
+							if (ns.IsEnhancedClient)
 							{
-								if (m.Poisoned)
-								{
-									ns.Send(new HealthbarPoison(m));
-                                    ns.Send(new HealthbarPoisonEC(m));
-								}
-
-								if (m.Blessed || m.YellowHealthbar)
-								{
-									ns.Send(new HealthbarYellow(m));
-                                    ns.Send(new HealthbarYellowEC(m));
-								}
+								ns.Send(new HealthbarPoisonEC(m));
+								ns.Send(new HealthbarYellowEC(m));
+							}
+							else if (ns.StygianAbyss)
+							{
+								ns.Send(new HealthbarPoison(m));
+								ns.Send(new HealthbarYellow(m));
 							}
 
 							if (m.IsDeadBondedPet)
@@ -7521,9 +7510,6 @@ namespace Server
 							if (ObjectPropertyList.Enabled)
 							{
 								ns.Send(m.OPLPacket);
-
-								//foreach ( Item item in m.m_Items )
-								//	ns.Send( item.OPLPacket );
 							}
 						}
 					}
@@ -7533,14 +7519,11 @@ namespace Server
 			}
 		}
 
-        public virtual void OnUpdateRangeChanged(int oldRange, int newRange)
-        {
-            if (oldRange != newRange)
-            {
-                ClearScreen();
-                SendEverything();
-            }
-        }
+		public virtual void OnUpdateRangeChanged(int oldRange, int newRange)
+		{
+			ClearScreen();
+			SendEverything();
+		}
 
 		[CommandProperty(AccessLevel.Counselor, AccessLevel.Decorator)]
 		public Map Map
@@ -8798,7 +8781,18 @@ namespace Server
 				if (m_Hidden != value)
 				{
 					m_Hidden = value;
-					//Delta( MobileDelta.Flags );
+
+                    if (m_Hidden)
+                    {
+                        if (Warmode)
+                        {
+                            Warmode = false;
+                        }
+                        else
+                        {
+                            Combatant = null;
+                        }
+                    }
 
 					OnHiddenChanged();
 				}
@@ -8909,8 +8903,6 @@ namespace Server
 
 					if (m_NetState == null)
 					{
-                        _FirstStep = false;
-
 						OnDisconnected();
 						EventSink.InvokeDisconnected(new DisconnectedEventArgs(this));
 
@@ -9776,9 +9768,7 @@ namespace Server
 
 			Point3D oldLocation = m_Location;
 			Map oldMap = m_Map;
-
-			Region oldRegion = m_Region;
-
+			
 			if (oldMap != null)
 			{
 				oldMap.OnLeave(this);
@@ -9787,9 +9777,9 @@ namespace Server
 				SendRemovePacket();
 			}
 
-			for (int i = 0; i < m_Items.Count; ++i)
+			foreach (Item o in m_Items)
 			{
-				m_Items[i].Map = map;
+				o.Map = map;
 			}
 
 			m_Map = map;
@@ -9798,85 +9788,48 @@ namespace Server
 
 			NetState ns = m_NetState;
 
+			if (ns != null)
+			{
+				ns.Sequence = 0;
+				ClearFastwalkStack();
+			}
+
 			if (m_Map != null)
 			{
 				m_Map.OnEnter(this);
-
-				UpdateRegion();
-
-				if (ns != null && m_Map != null)
-				{
-					ns.Sequence = 0;
-					ns.Send(new MapChange(this));
-					ns.Send(new MapPatches());
-					ns.Send(SeasonChange.Instantiate(GetSeason(), true));
-
-					if (ns.StygianAbyss)
-					{
-						ns.Send(new MobileUpdate(this));
-					}
-					else
-					{
-						ns.Send(new MobileUpdateOld(this));
-					}
-
-					ClearFastwalkStack();
-				}
-			}
-			else
-			{
-				UpdateRegion();
 			}
 
-			if (ns != null)
-			{
-				if (m_Map != null)
-				{
-					Send(new ServerChange(this, m_Map));
-				}
+			UpdateRegion();
 
-				ns.Sequence = 0;
-				ClearFastwalkStack();
+			if (m_Map != null && ns != null)
+			{
+				ns.Send(new MapChange(this));
+				ns.Send(new MapPatches());
+
+				ns.Send(SeasonChange.Instantiate(GetSeason(), true));
+
+				Send(new ServerChange(this, m_Map));
 
 				ns.Send(MobileIncoming.Create(ns, this, this));
 
 				if (ns.StygianAbyss)
 				{
 					ns.Send(new MobileUpdate(this));
-					CheckLightLevels(true);
-					ns.Send(new MobileUpdate(this));
 				}
 				else
 				{
 					ns.Send(new MobileUpdateOld(this));
-					CheckLightLevels(true);
-					ns.Send(new MobileUpdateOld(this));
 				}
+
+				ns.Send(new MobileAttributes(this));
+
+				CheckLightLevels(true);
+
+				ns.Send(SupportedFeatures.Instantiate(ns));
 			}
 
 			SendEverything();
 			SendIncomingPacket();
-
-			if (ns != null)
-			{
-				ns.Sequence = 0;
-				ClearFastwalkStack();
-
-				ns.Send(MobileIncoming.Create(ns, this, this));
-
-				if (ns.StygianAbyss)
-				{
-					ns.Send(SupportedFeatures.Instantiate(ns));
-					ns.Send(new MobileUpdate(this));
-					ns.Send(new MobileAttributes(this));
-				}
-				else
-				{
-					ns.Send(SupportedFeatures.Instantiate(ns));
-					ns.Send(new MobileUpdateOld(this));
-					ns.Send(new MobileAttributes(this));
-				}
-			}
 
 			OnMapChange(oldMap);
 			OnLocationChange(oldLocation);
@@ -9886,9 +9839,7 @@ namespace Server
 				m_Region.OnLocationChanged(this, oldLocation);
 			}
 		}
-
-        private bool _FirstStep;
-
+		
 		public virtual void SetLocation(Point3D newLocation, bool isTeleport)
 		{
 			if (m_Deleted)
@@ -9903,11 +9854,14 @@ namespace Server
 				m_Location = newLocation;
 				UpdateRegion();
 
-				BankBox box = FindBankNoCreate();
-
-				if (box != null && box.Opened)
+				if (AccessLevel == AccessLevel.Player)
 				{
-					box.Close();
+					BankBox box = FindBankNoCreate();
+
+					if (box != null && box.Opened)
+					{
+						box.Close();
+					}
 				}
 
 				if (m_NetState != null)
@@ -9920,7 +9874,7 @@ namespace Server
 					m_Map.OnMove(oldLocation, this);
 				}
 
-				if (isTeleport && m_NetState != null && (!m_NetState.HighSeas || !m_NoMoveHS))
+				if (isTeleport && m_NetState != null && (!m_NetState.HighSeas || !NoMoveHS))
 				{
 					m_NetState.Sequence = 0;
 
@@ -9946,7 +9900,7 @@ namespace Server
 
 					foreach (NetState ns in eable)
 					{
-						if (ns != m_NetState && !Utility.InUpdateRange(newLocation, ns.Mobile.Location))
+						if (ns != m_NetState && !Utility.InUpdateRange(ns.Mobile, newLocation, ns.Mobile))
 						{
 							ns.Send(RemovePacket);
 						}
@@ -9954,169 +9908,160 @@ namespace Server
 
 					eable.Free();
 
+					Packet hbpPacket = Packet.Acquire(new HealthbarPoison(this)), 
+						   hbyPacket = Packet.Acquire(new HealthbarYellow(this));
+
+					Packet hbpKRPacket = Packet.Acquire(new HealthbarPoisonEC(this)),
+						   hbyKRPacket = Packet.Acquire(new HealthbarYellowEC(this));
+
 					NetState ourState = m_NetState;
 
 					// Check to see if we are attached to a client
-                    if (ourState != null)
-                    {
-                        // We are attached to a client, so it's a bit more complex. We need to send new items and people to ourself, and ourself to other clients
+					if (ourState != null)
+					{
+						var eeable = map.GetObjectsInRange(newLocation);
 
-                        if (!_FirstStep)
-                        {
-                            SendEverything();
-                            _FirstStep = true;
-                        }
-                        else
-                        {
-                            var eeable = map.GetObjectsInRange(newLocation, Core.GlobalMaxUpdateRange);
+						// We are attached to a client, so it's a bit more complex. We need to send new items and people to ourself, and ourself to other clients
+						foreach (IEntity o in eeable)
+						{
+							if (o is Item)
+							{
+								Item item = (Item)o;
 
-                            foreach (IEntity o in eeable)
-                            {
-                                if (o is Item)
-                                {
-                                    Item item = (Item)o;
+								int range = item.GetUpdateRange(this);
+								Point3D loc = item.GetWorldLocation();
 
-                                    int range = item.GetUpdateRange(this);
-                                    Point3D loc = item.Location;
+								if (!Utility.InRange(oldLocation, loc, range) && Utility.InRange(newLocation, loc, range) && CanSee(item))
+								{
+									item.SendInfoTo(ourState);
+								}
+							}
+							else if (o != this && o is Mobile)
+							{
+								Mobile m = (Mobile)o;
 
-                                    if (!Utility.InRange(oldLocation, loc, range) && Utility.InRange(newLocation, loc, range) && CanSee(item))
-                                    {
-                                        item.SendInfoTo(ourState);
-                                    }
-                                    else if (Utility.InRange(oldLocation, loc, range) && !Utility.InRange(newLocation, loc, range) && CanSee(item))
-                                    {
-                                        ourState.Send(item.RemovePacket);
-                                    }
-                                }
-                                else if (o != this && o is Mobile)
-                                {
-                                    Mobile m = (Mobile)o;
+								// Will we enter their update range? (Y: Update)
+								bool update = Utility.InUpdateRange(m, newLocation, m);
 
-                                    if (!Utility.InUpdateRange(this, newLocation, m.m_Location) &&
-                                        !Utility.InUpdateRange(m, newLocation, m.m_Location))
-                                    {
-                                        continue;
-                                    }
+								// Were we already in their update range? (Y: Cancel Update)
+								if (update && Utility.InUpdateRange(m, oldLocation, m))
+								{
+									update = false;
+								}
 
-                                    bool inMyOldRange = Utility.InUpdateRange(this, oldLocation, m.m_Location);
-                                    bool inThierOldRange = Utility.InUpdateRange(m, oldLocation, m.m_Location);
+								if (m.m_NetState != null && (update || (isTeleport && (!m.m_NetState.HighSeas || !NoMoveHS))) && m.CanSee(this))
+								{
+									m.m_NetState.Send(MobileIncoming.Create(m.m_NetState, m, this));
 
-                                    if (m.m_NetState != null && ((isTeleport && (!m.m_NetState.HighSeas || !m_NoMoveHS)) || !inThierOldRange) &&
-                                        m.CanSee(this))
-                                    {
-                                        m.m_NetState.Send(MobileIncoming.Create(m.m_NetState, m, this));
+									if (m.m_NetState.IsEnhancedClient)
+									{
+										m.m_NetState.Send(hbpKRPacket);
+										m.m_NetState.Send(hbyKRPacket);
+									}
+									else if (m.m_NetState.StygianAbyss)
+									{
+										m.m_NetState.Send(hbpPacket);
+										m.m_NetState.Send(hbyPacket);
+									}
 
-                                        if (m.m_NetState.StygianAbyss)
-                                        {
-                                            if (m_Poison != null)
-                                            {
-                                                m.m_NetState.Send(new HealthbarPoison(this));
-                                                m.m_NetState.Send(new HealthbarPoisonEC(this));
-                                            }
+									if (IsDeadBondedPet)
+									{
+										m.m_NetState.Send(new BondedStatus(0, m_Serial, 1));
+									}
 
-                                            if (m_Blessed || m_YellowHealthbar)
-                                            {
-                                                m.m_NetState.Send(new HealthbarYellow(this));
-                                                m.m_NetState.Send(new HealthbarYellowEC(this));
-                                            }
-                                        }
+									if (ObjectPropertyList.Enabled)
+									{
+										m.m_NetState.Send(OPLPacket);
+									}
+								}
 
-                                        if (IsDeadBondedPet)
-                                        {
-                                            m.m_NetState.Send(new BondedStatus(0, m_Serial, 1));
-                                        }
+								// Will they enter in our update range? (Y: Update)
+								update = Utility.InUpdateRange(this, newLocation, m);
 
-                                        if (ObjectPropertyList.Enabled)
-                                        {
-                                            m.m_NetState.Send(OPLPacket);
+								// Were they already in our update range? (Y: Cancel Update)
+								if (update && Utility.InUpdateRange(this, oldLocation, m))
+								{
+									update = false;
+								}
 
-                                            //foreach ( Item item in m_Items )
-                                            //	m.m_NetState.Send( item.OPLPacket );
-                                        }
-                                    }
+								if (update && CanSee(m))
+								{
+									ourState.Send(MobileIncoming.Create(ourState, this, m));
 
-                                    if (!inMyOldRange && CanSee(m))
-                                    {
-                                        ourState.Send(MobileIncoming.Create(ourState, this, m));
+									if (ourState.IsEnhancedClient)
+									{
+										ourState.Send(new HealthbarPoisonEC(m));
+										ourState.Send(new HealthbarYellowEC(m));
+									}
+									else if (ourState.StygianAbyss)
+									{
+										ourState.Send(new HealthbarPoison(m));
+										ourState.Send(new HealthbarYellow(m));
+									}
 
-                                        if (ourState.StygianAbyss)
-                                        {
-                                            if (m.Poisoned)
-                                            {
-                                                ourState.Send(new HealthbarPoison(m));
-                                                ourState.Send(new HealthbarPoisonEC(m));
-                                            }
+									if (m.IsDeadBondedPet)
+									{
+										ourState.Send(new BondedStatus(0, m.m_Serial, 1));
+									}
 
-                                            if (m.Blessed || m.YellowHealthbar)
-                                            {
-                                                ourState.Send(new HealthbarYellow(m));
-                                                ourState.Send(new HealthbarYellowEC(m));
-                                            }
-                                        }
+									if (ObjectPropertyList.Enabled)
+									{
+										ourState.Send(m.OPLPacket);
+									}
+								}
+							}
+						}
 
-                                        if (m.IsDeadBondedPet)
-                                        {
-                                            ourState.Send(new BondedStatus(0, m.m_Serial, 1));
-                                        }
+						eeable.Free();
+					}
+					else
+					{
+						eable = map.GetClientsInRange(newLocation);
 
-                                        if (ObjectPropertyList.Enabled)
-                                        {
-                                            ourState.Send(m.OPLPacket);
+						// We're not attached to a client, so simply send an Incoming
+						foreach (NetState ns in eable)
+						{
+							bool update = Utility.InUpdateRange(ns.Mobile, newLocation, ns.Mobile);
 
-                                            //foreach ( Item item in m.m_Items )
-                                            //	ourState.Send( item.OPLPacket );
-                                        }
-                                    }
-                                }
-                            }
+							if (update && Utility.InUpdateRange(ns.Mobile, oldLocation, ns.Mobile))
+							{
+								update = false;
+							}
 
-                            eeable.Free();
-                        }
-                    }
-                    else
-                    {
-                        eable = map.GetClientsInRange(newLocation);
+							if ((update || (isTeleport && (!ns.HighSeas || !NoMoveHS))) && ns.Mobile.CanSee(this))
+							{
+								ns.Send(MobileIncoming.Create(ns, ns.Mobile, this));
 
-                        // We're not attached to a client, so simply send an Incoming
-                        foreach (NetState ns in eable)
-                        {
-                            if (((isTeleport && (!ns.HighSeas || !m_NoMoveHS)) || (!ns.Mobile.InUpdateRange(oldLocation) && ns.Mobile.InUpdateRange(newLocation))) &&
-                                ns.Mobile.CanSee(this))
-                            {
-                                ns.Send(MobileIncoming.Create(ns, ns.Mobile, this));
+								if (ns.IsEnhancedClient)
+								{
+									ns.Send(hbpKRPacket);
+									ns.Send(hbyKRPacket);
+								}
+								else if (ns.StygianAbyss)
+								{
+									ns.Send(hbpPacket);
+									ns.Send(hbyPacket);
+								}
 
-                                if (ns.StygianAbyss)
-                                {
-                                    if (m_Poison != null)
-                                    {
-                                        ns.Send(new HealthbarPoison(this));
-                                        ns.Send(new HealthbarPoisonEC(this));
-                                    }
+								if (IsDeadBondedPet)
+								{
+									ns.Send(new BondedStatus(0, m_Serial, 1));
+								}
 
-                                    if (m_Blessed || m_YellowHealthbar)
-                                    {
-                                        ns.Send(new HealthbarYellow(this));
-                                        ns.Send(new HealthbarYellowEC(this));
-                                    }
-                                }
+								if (ObjectPropertyList.Enabled)
+								{
+									ns.Send(OPLPacket);
+								}
+							}
+						}
 
-                                if (IsDeadBondedPet)
-                                {
-                                    ns.Send(new BondedStatus(0, m_Serial, 1));
-                                }
+						eable.Free();
+					}
 
-                                if (ObjectPropertyList.Enabled)
-                                {
-                                    ns.Send(OPLPacket);
-
-                                    //foreach ( Item item in m_Items )
-                                    //	ns.Send( item.OPLPacket );
-                                }
-                            }
-                        }
-
-                        eable.Free();
-                    }
+					Packet.Release(hbpKRPacket);
+					Packet.Release(hbyKRPacket);
+					Packet.Release(hbpPacket);
+					Packet.Release(hbyPacket);
 				}
 
 				OnLocationChange(oldLocation);
@@ -10956,8 +10901,6 @@ namespace Server
 				World.m_MobileTypes.Add(ourType);
 				m_TypeRef = World.m_MobileTypes.Count - 1;
 			}
-
-			Timer.DelayCall(EventSink.InvokeMobileCreated, new MobileCreatedEventArgs(this));
 		}
 
 		public Mobile()
@@ -11189,17 +11132,6 @@ namespace Server
 				sendIncoming = true;
 			}
 
-			/*if ( (delta & MobileDelta.Hue) != 0 )
-			{
-			sendNonlocalIncoming = true;
-			sendUpdate = true;
-			}
-			else if ( (delta & (MobileDelta.Direction | MobileDelta.Body)) != 0 )
-			{
-			sendNonlocalMoving = true;
-			sendUpdate = true;
-			}
-			else*/
 			if ((delta & (MobileDelta.Flags | MobileDelta.Noto)) != 0)
 			{
 				sendMoving = true;
@@ -11430,7 +11362,7 @@ namespace Server
 				{
 					beholder = state.Mobile;
 
-					if (beholder != m && beholder.CanSee(m))
+					if (beholder != m && Utility.InUpdateRange(beholder, m) && beholder.CanSee(m))
 					{
 						if (sendRemove)
 						{

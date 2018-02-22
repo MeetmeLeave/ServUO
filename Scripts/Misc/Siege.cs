@@ -359,11 +359,6 @@ namespace Server
                     return false;
             }
 
-            if (Core.SA)
-            {
-                return t != typeof(BlankScroll);
-            }
-
             return true;
         }
 
@@ -382,7 +377,9 @@ namespace Server
             typeof(Flax),
             typeof(SpoolOfThread),
             typeof(Feather),
-            typeof(Shaft)
+            typeof(Shaft),
+            typeof(Arrow),
+            typeof(Bolt)
         };
 
         public static void TryBlessItem(PlayerMobile pm, object targeted)
@@ -391,7 +388,7 @@ namespace Server
 
             if (item != null)
             {
-                if (pm.Items.Contains(item) || (pm.Backpack != null && pm.Backpack.Items.Contains(item)))
+                if (CanBlessItem(pm, item))
                 {
                     if (pm.BlessedItem != null && pm.BlessedItem == item)
                     {
@@ -416,7 +413,17 @@ namespace Server
                         }
                     }
                 }
+                else
+                {
+                    pm.SendLocalizedMessage(1045114); // You cannot bless that item
+                }
             }
+        }
+
+        public static bool CanBlessItem(PlayerMobile pm, Item item)
+        {
+            return (pm.Items.Contains(item) || (pm.Backpack != null && pm.Backpack.Items.Contains(item))
+                && !item.Stackable && (item is BaseArmor || item is BaseJewel || item is BaseClothing || item is BaseWeapon));
         }
 
         public static void CheckUsesRemaining(Mobile from, Item item)

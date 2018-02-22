@@ -121,12 +121,12 @@ namespace Server.Mobiles
 
 		public override void OnThink()
 		{
-			Mobile master = ControlMaster;
-
-			if (Deleted)
+            if (Deleted || Map == null)
 			{
 				return;
 			}
+
+            Mobile master = ControlMaster;
 
 			if (master == null || master.Deleted)
 			{
@@ -161,7 +161,7 @@ namespace Server.Mobiles
 
                                     Point2D p = new Point2D(x, y);
 
-                                    if (InRange(p, 1) && master.InRange(p, 1))
+                                    if (InRange(p, 1) && master.InRange(p, 1) && Map != null)
                                     {
                                         CurrentSpeed = .01;
                                         AIObject.MoveTo(new Point3D(x, y, Map.GetAverageZ(x, y)), false, 0);

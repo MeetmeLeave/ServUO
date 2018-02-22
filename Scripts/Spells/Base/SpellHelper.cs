@@ -123,10 +123,6 @@ namespace Server.Spells
 
             int sdiBonus = AosAttributes.GetValue(caster, AosAttribute.SpellDamage);
 
-            #region Mondain's Legacy
-            sdiBonus += ArcaneEmpowermentSpell.GetSpellBonus(caster, playerVsPlayer);
-            #endregion
-
             if (target != null)
             {
                 if (RunedSashOfWarding.IsUnderEffects(target, WardingEffect.SpellDamage))
@@ -135,7 +131,7 @@ namespace Server.Spells
                 sdiBonus -= Block.GetSpellReduction(target);
             }
 
-            // PvP spell damage increase cap of 15% from an item’s magic property, 30% if spell school focused.
+            // PvP spell damage increase cap of 15% from an itemâ€™s magic property, 30% if spell school focused.
             if (Core.SE && playerVsPlayer)
             {
                 sdiBonus = Math.Min(sdiBonus, PvPSpellDamageCap(caster, skill));
@@ -195,7 +191,13 @@ namespace Server.Spells
 
         public static void Turn(Mobile from, object to)
         {
+            Turn(from, to, 0);
+        }
+
+        public static void Turn(Mobile from, object to, int delay)
+        {
             IPoint3D target = to as IPoint3D;
+            int d = -1;
 
             if (target == null)
                 return;
@@ -205,11 +207,23 @@ namespace Server.Spells
                 Item item = (Item)target;
 
                 if (item.RootParent != from)
-                    from.Direction = from.GetDirectionTo(item.GetWorldLocation());
+                    d = (int)from.GetDirectionTo(item.GetWorldLocation());
             }
             else if (from != target)
             {
-                from.Direction = from.GetDirectionTo(target);
+                d = (int)from.GetDirectionTo(target);
+            }
+
+            if (d > -1 && delay > 0)
+            {
+                Timer.DelayCall(TimeSpan.FromMilliseconds(delay), () =>
+                    {
+                        from.Direction = (Direction)d;
+                    });
+            }
+            else if (d > -1)
+            {
+                from.Direction = (Direction)d;
             }
         }
 
@@ -231,7 +245,7 @@ namespace Server.Spells
                     return true;
             }
 
-            if (Core.Expansion == Expansion.AOS)
+            if (Core.AOS)
             {
                 for (int i = 0; i < m.Aggressors.Count; ++i)
                 {
@@ -270,6 +284,28 @@ namespace Server.Spells
             }
 
             return false;
+        }
+
+        public static bool CheckField(Point3D p, Map map)
+        {
+            if (map == null)
+                return false;
+
+            IPooledEnumerable eable = map.GetItemsInRange(p, 0);
+
+            foreach (Item item in eable)
+            {
+                Type t = item.GetType();
+
+                if(t.IsDefined(typeof(DispellableFieldAttribute), false) || t.IsDefined(typeof(DispellableFieldAttribute), true))
+                {
+                    eable.Free();
+                    return false;
+                }
+            }
+
+            eable.Free();
+            return true;
         }
 
         public static bool CheckWater(Point3D p, Map map)
@@ -363,6 +399,11 @@ namespace Server.Spells
             return true;
         }
 
+        public static bool AddStatCurse(Mobile caster, Mobile target, StatType type)
+        {
+            return AddStatCurse(caster, target, type, true);
+        }
+
         public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, bool blockSkill)
         {
             return AddStatCurse(caster, target, type, GetOffset(caster, target, type, true, blockSkill), TimeSpan.Zero);
@@ -390,7 +431,7 @@ namespace Server.Spells
             {
                 int span = (((6 * caster.Skills.EvalInt.Fixed) / 50) + 1);
 
-                if (caster.Spell is CurseSpell && SkillMasterySpell.GetSpellForParty(target, typeof(ResilienceSpell)) != null)
+                if (caster.Spell is CurseSpell && SkillMasterySpell.UnderPartyEffects(target, typeof(ResilienceSpell)))
                     span /= 2;
 
                 return TimeSpan.FromSeconds(span);
@@ -413,7 +454,10 @@ namespace Server.Spells
             double percent;
 
             if (curse)
-                percent = 8 + (caster.Skills.EvalInt.Fixed / 100) - (target.Skills.MagicResist.Fixed / 100);
+            {
+                double resistFixed = target.Skills.MagicResist.Fixed - (EvilOmenSpell.GetResistMalus(target) * 10);
+                percent = 8 + (caster.Skills.EvalInt.Fixed / 100) - (resistFixed / 100);
+            }
             else
                 percent = 1 + (caster.Skills.EvalInt.Fixed / 100);
 
@@ -485,32 +529,8 @@ namespace Server.Spells
             if (to.Hidden && to.AccessLevel > from.AccessLevel)
                 return false;
 
-            #region Dueling
-            PlayerMobile pmFrom = from as PlayerMobile;
-            PlayerMobile pmTarg = to as PlayerMobile;
-
-            if (pmFrom == null && from is BaseCreature)
-            {
-                BaseCreature bcFrom = (BaseCreature)from;
-
-                if (bcFrom.Summoned)
-                    pmFrom = bcFrom.SummonMaster as PlayerMobile;
-            }
-
-            if (pmTarg == null && to is BaseCreature)
-            {
-                BaseCreature bcTarg = (BaseCreature)to;
-
-                if (bcTarg.Summoned)
-                    pmTarg = bcTarg.SummonMaster as PlayerMobile;
-            }
-
-            if (pmFrom != null && pmTarg != null)
-            {
-                if (pmFrom.DuelContext != null && pmFrom.DuelContext == pmTarg.DuelContext && pmFrom.DuelContext.Started && pmFrom.DuelPlayer != null && pmTarg.DuelPlayer != null)
-                    return (pmFrom.DuelPlayer.Participant != pmTarg.DuelPlayer.Participant);
-            }
-            #endregion
+            if (Server.Engines.ArenaSystem.PVPArenaSystem.IsFriendly(from, to))
+                return false;
 
             Guild fromGuild = GetGuildFor(from);
             Guild toGuild = GetGuildFor(to);
@@ -727,19 +747,23 @@ namespace Server.Spells
             new TravelValidator(IsGuardianRoom),
             new TravelValidator(IsHeartwood),
             new TravelValidator(IsMLDungeon),
+            new TravelValidator(IsSADungeon),
+            new TravelValidator(IsTombOfKings),
+            new TravelValidator(IsMazeOfDeath),
+            new TravelValidator(IsSAEntrance),
             new TravelValidator(IsEodon),
         };
 
         private static readonly bool[,] m_Rules = new bool[,]
         {
-					/*T2A(Fel),	Khaldun,	Ilshenar,	Wind(Tram),	Wind(Fel),	Dungeons(Fel),	Solen(Tram),	Solen(Fel),	CrystalCave(Malas),	Gauntlet(Malas),	Gauntlet(Ferry),	SafeZone,	Stronghold,	ChampionSpawn,	Dungeons(Tokuno[Malas]),	LampRoom(Doom),	GuardianRoom(Doom),	Heartwood,	MLDungeons, Eodon*/
-/* Recall From */	{ false,	false,		true,		true,		false,		false,			true,			false,		false,				false,				false,				true,		true,		false,			true,						false,			false,				false,		false,      true} ,
-/* Recall To */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false },
-/* Gate From */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false },
-/* Gate To */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false },
-/* Mark In */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false },
-/* Tele From */		{ true,		true,		true,		true,		true,		true,			true,			true,		false,				true,				true,				true,		false,		true,			true,						true,			true,				false,		true,       true },
-/* Tele To */		{ true,		true,		true,		true,		true,		true,			true,			true,		false,				true,				false,				false,		false, 		true,			true,						true,			true,				false,		false,      true },
+					/*T2A(Fel),	Khaldun,	Ilshenar,	Wind(Tram),	Wind(Fel),	Dungeons(Fel),	Solen(Tram),	Solen(Fel),	CrystalCave(Malas),	Gauntlet(Malas),	Gauntlet(Ferry),	SafeZone,	Stronghold,	ChampionSpawn,	Dungeons(Tokuno[Malas]),	LampRoom(Doom),	GuardianRoom(Doom),	Heartwood,	MLDungeons, SA Dungeons		Tomb of Kings	Maze of Death	SA Entrance,    Eodon*/
+/* Recall From */	{ false,	false,		true,		true,		false,		false,			true,			false,		false,				false,				false,				true,		true,		false,			true,						false,			false,				false,		false,      true,           true,           false,          false,          true} ,
+/* Recall To */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false,          false,          false,          false,          false },
+/* Gate From */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false,          false,          false,          false,          false },
+/* Gate To */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false,          false,          false,          false,          false },
+/* Mark In */		{ false,	false,		false,		false,		false,		false,			false,			false,		false,				false,				false,				false,		false,		false,			false,						false,			false,				false,		false,      false,          false,          false,          false,          false },
+/* Tele From */		{ true,		true,		true,		true,		true,		true,			true,			true,		false,				true,				true,				true,		false,		true,			true,						true,			true,				false,		true,       true,           false,          false,          false,          true },
+/* Tele To */		{ true,		true,		true,		true,		true,		true,			true,			true,		false,				true,				false,				false,		false, 		true,			true,						true,			true,				false,		false,      true,           false,          false,          false,          true },
         };
 
         public static void SendInvalidMessage(Mobile caster, TravelCheckType type)
@@ -923,21 +947,6 @@ namespace Server.Spells
 
         public static bool IsSafeZone(Map map, Point3D loc)
         {
-            #region Duels
-            if (Region.Find(loc, map).IsPartOf<Engines.ConPVP.SafeZone>())
-            {
-                if (m_TravelType == TravelCheckType.TeleportTo || m_TravelType == TravelCheckType.TeleportFrom)
-                {
-                    PlayerMobile pm = m_TravelCaster as PlayerMobile;
-
-                    if (pm != null && pm.DuelPlayer != null && !pm.DuelPlayer.Eliminated)
-                        return true;
-                }
-
-                return true;
-            }
-            #endregion
-
             return false;
         }
 
@@ -1029,12 +1038,36 @@ namespace Server.Spells
             return MondainsLegacy.IsMLRegion(Region.Find(loc, map));
         }
 
+        public static bool IsTombOfKings(Map map, Point3D loc)
+        {
+            return (Region.Find(loc, map).IsPartOf(typeof(TombOfKingsRegion)));
+        }
+
+        public static bool IsMazeOfDeath(Map map, Point3D loc)
+        {
+            return (Region.Find(loc, map).IsPartOf(typeof(MazeOfDeathRegion)));
+        }
+
+        public static bool IsSAEntrance(Map map, Point3D loc)
+        {
+            return map == Map.TerMur && loc.X >= 1122 && loc.Y >= 1067 && loc.X <= 1144 && loc.Y <= 1086;
+        }
+
+        public static bool IsSADungeon(Map map, Point3D loc)
+        {
+            if (map != Map.TerMur)
+                return false;
+
+            Region region = Region.Find(loc, map);
+            return (region.IsPartOf(typeof(DungeonRegion)) && !region.IsPartOf(typeof(TombOfKingsRegion)));
+        }
+
         public static bool IsEodon(Map map, Point3D loc)
         {
             if (map == Map.Felucca && loc.X >= 6975 && loc.X <= 7042 && loc.Y >= 2048 && loc.Y <= 2115)
                 return true;
 
-            return map == Map.TerMur && loc.X > 64 && loc.X < 1015 && loc.Y > 1344 && loc.Y < 2239;
+            return map == Map.TerMur && loc.X >= 64 && loc.X <= 1015 && loc.Y >= 1344 && loc.Y <= 2239;
         }
 
         public static bool IsNewDungeon(Map map, Point3D loc)
@@ -1076,19 +1109,7 @@ namespace Server.Spells
 
             if (map == null)
                 return false;
-
-            #region Dueling
-            Engines.ConPVP.SafeZone sz = (Engines.ConPVP.SafeZone)Region.Find(loc, map).GetRegion(typeof(Engines.ConPVP.SafeZone));
-
-            if (sz != null)
-            {
-                PlayerMobile pm = (PlayerMobile)caster;
-
-                if (pm == null || pm.DuelContext == null || !pm.DuelContext.Started || pm.DuelPlayer == null || pm.DuelPlayer.Eliminated)
-                    return true;
-            }
-            #endregion
-
+            
             GuardedRegion reg = (GuardedRegion)Region.Find(loc, map).GetRegion(typeof(GuardedRegion));
 
             return (reg != null && !reg.IsDisabled());
@@ -1119,9 +1140,25 @@ namespace Server.Spells
             return CheckReflect(circle, ref caster, ref target);
         }
 
-        public static bool CheckReflect(int circle, ref Mobile caster, ref Mobile target)
+        public static bool CheckReflect(int circle, ref Mobile caster, ref Mobile target, DamageType type = DamageType.Spell)
         {
             bool reflect = false;
+
+            if (Core.AOS && type == DamageType.Spell)
+            {
+                Clone clone = null;
+
+                if (target != null)
+                {
+                    clone = MirrorImage.GetDeflect(caster, target);
+                }
+
+                if (clone != null)
+                {
+                    target = clone;
+                    return false;
+                }
+            }
 
             if (target.MagicDamageAbsorb > 0)
             {
@@ -1270,13 +1307,9 @@ namespace Server.Spells
                     ((BaseCreature)target).AlterSpellDamageFrom(from, ref iDamage);
 
                 WeightOverloading.DFA = dfa;
+                DamageType dtype = spell != null ? spell.SpellDamageType : DamageType.Spell;
 
-                int damageGiven = AOS.Damage(damageable, from, iDamage, phys, fire, cold, pois, nrgy, chaos, direct);
-
-                if (from != null && target != null) // sanity check
-                {
-                    DoLeech(damageGiven, from, target);
-                }
+                int damageGiven = AOS.Damage(damageable, from, iDamage, phys, fire, cold, pois, nrgy, chaos, direct, dtype);
 
                 if(target != null)
                     Spells.Mysticism.SpellPlagueSpell.OnMobileDamaged(target);
@@ -1302,42 +1335,6 @@ namespace Server.Spells
             }
         }
 
-        public static void DoLeech(int damageGiven, Mobile from, Mobile target)
-        {
-            TransformContext context = TransformationSpellHelper.GetContext(from);
-
-            if (context != null) /* cleanup */
-            {
-                if (context.Type == typeof(WraithFormSpell))
-                {
-                    int wraithLeech = Math.Min(target.Mana, (5 + (int)((15 * from.Skills.SpiritSpeak.Value) / 100))); // Wraith form gives 5-20% mana leech
-                    int manaLeech = AOS.Scale(damageGiven, wraithLeech);
-                    if (manaLeech != 0)
-                    {
-                        from.Mana += manaLeech;
-                        from.PlaySound(0x44D);
-
-                        target.Mana -= manaLeech;
-                    }
-                }
-                else if (context.Type == typeof(VampiricEmbraceSpell))
-                {
-                    #region High Seas
-                    if (target is BaseCreature && ((BaseCreature)target).TaintedLifeAura)
-                    {
-                        AOS.Damage(from, target, AOS.Scale(damageGiven, 20), false, 0, 0, 0, 0, 0, 0, 100, false, false, false);
-                        from.SendLocalizedMessage(1116778); //The tainted life force energy damages you as your body tries to absorb it.
-                    }
-                    #endregion
-                    else
-                    {
-                        from.Hits += AOS.Scale(damageGiven, 20);
-                        from.PlaySound(0x44D);
-                    }
-                }
-            }
-        }
-
         public static void Heal(int amount, Mobile target, Mobile from)
         {
             Heal(amount, target, from, true);
@@ -1353,8 +1350,6 @@ namespace Server.Spells
 
                 if (realAmount > 0 && target != from && from is PlayerMobile && target is PlayerMobile)
                     SpiritualityVirtue.OnHeal(from, realAmount);
-
-                SpiritualityVirtue.OnHeal(from, realAmount);
             }
 
             target.Heal(amount, from, message);
@@ -1453,13 +1448,9 @@ namespace Server.Spells
                     ((BaseCreature)m_Target).AlterSpellDamageFrom(m_From, ref m_Damage);
 
                 WeightOverloading.DFA = m_DFA;
+                DamageType dtype = m_Spell != null ? m_Spell.SpellDamageType : DamageType.Spell;
 
-                int damageGiven = AOS.Damage(m_Target, m_From, m_Damage, m_Phys, m_Fire, m_Cold, m_Pois, m_Nrgy, m_Chaos, m_Direct);
-
-                if (m_From != null && target != null) // sanity check
-                {
-                    DoLeech(damageGiven, m_From, target);
-                }
+                int damageGiven = AOS.Damage(m_Target, m_From, m_Damage, m_Phys, m_Fire, m_Cold, m_Pois, m_Nrgy, m_Chaos, m_Direct, dtype);
 
                 WeightOverloading.DFA = DFAlgorithm.Standard;
 

@@ -48,7 +48,7 @@ namespace Server.Items
             }
         }
 
-        public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool, CraftItem craftItem, int resHue)
+        public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, ITool tool, CraftItem craftItem, int resHue)
         {
             Quality = (ItemQuality)quality;
 
@@ -1013,6 +1013,48 @@ namespace Server.Items
         public override Food Cook()
         {
             return new FishSteak();
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+
+            int version = reader.ReadInt();
+        }
+    }
+
+    public class RawRotwormMeat : CookableFood
+    {
+        [Constructable]
+        public RawRotwormMeat()
+            : this(1)
+        {
+        }
+
+        [Constructable]
+        public RawRotwormMeat(int amount)
+            : base(0x2DB9, 10)
+        {
+            Stackable = true;
+            Weight = 0.1;
+            Amount = amount;
+        }
+
+        public RawRotwormMeat(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override Food Cook()
+        {
+            return null;
         }
 
         public override void Serialize(GenericWriter writer)

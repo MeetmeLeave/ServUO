@@ -7,8 +7,6 @@
 #region References
 using System;
 using System.Collections.Generic;
-
-using Server.Engines.ConPVP;
 using Server.Items;
 using Server.Misc;
 using Server.Mobiles;
@@ -69,6 +67,8 @@ namespace Server.Spells
 		//Expo & Magic Arrow have enough delay and a short enough cast time to bring up 
 		//the possibility of stacking 'em.  Note that a MA & an Explosion will stack, but
 		//of course, two MA's won't.
+
+        public virtual DamageType SpellDamageType { get { return DamageType.Spell; } }
 
 		private static readonly Dictionary<Type, DelayedDamageContextWrapper> m_ContextTable =
 			new Dictionary<Type, DelayedDamageContextWrapper>();
@@ -161,8 +161,13 @@ namespace Server.Spells
 
             NegativeAttributes.OnCombatAction(Caster);
 
-            if (d is Mobile && (Mobile)d != m_Caster)
-                NegativeAttributes.OnCombatAction((Mobile)d);
+            if (d is Mobile)
+            {
+                if((Mobile)d != m_Caster)
+                    NegativeAttributes.OnCombatAction((Mobile)d);
+
+                EvilOmenSpell.TryEndEffect((Mobile)d);
+            }
 		}
 
 		public Spell(Mobile caster, Item scroll, SpellInfo info)
@@ -193,31 +198,23 @@ namespace Server.Spells
 		{
             Mobile target = damageable as Mobile;
 
-			int damage = Utility.Dice(dice, sides, bonus) * 100;
-			int damageBonus = 0;
+            int damage = Utility.Dice(dice, sides, bonus) * 100;
 
-			int inscribeSkill = GetInscribeFixed(m_Caster);
-			int inscribeBonus = (inscribeSkill + (1000 * (inscribeSkill / 1000))) / 200;
-			damageBonus += inscribeBonus;
+            int inscribeSkill = GetInscribeFixed(m_Caster);
+            int scribeBonus = inscribeSkill >= 1000 ? 10 : inscribeSkill / 200;
 
-			int intBonus = Caster.Int / 10;
-			damageBonus += intBonus;
+            int damageBonus = scribeBonus +
+                              (Caster.Int / 10) +
+                              SpellHelper.GetSpellDamageBonus(m_Caster, target, CastSkill, playerVsPlayer);
 
-            damageBonus += SpellHelper.GetSpellDamageBonus(m_Caster, target, CastSkill, playerVsPlayer);
+            int evalSkill = GetDamageFixed(m_Caster);
+            int evalScale = 30 + ((9 * evalSkill) / 100);
 
-			damage = AOS.Scale(damage, 100 + damageBonus);
+            damage = AOS.Scale(damage, evalScale);
+            damage = AOS.Scale(damage, 100 + damageBonus);
+            damage = AOS.Scale(damage, (int)(scalar * 100));
 
-            if (target != null && Feint.Registry.ContainsKey(target) && Feint.Registry[target].Enemy == Caster)
-                damage -= (int)((double)damage * ((double)Feint.Registry[target].DamageReduction / 100));
-
-			int evalSkill = GetDamageFixed(m_Caster);
-			int evalScale = 30 + ((9 * evalSkill) / 100);
-
-			damage = AOS.Scale(damage, evalScale);
-
-			damage = AOS.Scale(damage, (int)(scalar * 100));
-
-			return damage / 100;
+            return damage / 100;
 		}
 
 		public virtual bool IsCasting { get { return m_State == SpellState.Casting; } }
@@ -288,7 +285,9 @@ namespace Server.Spells
                 #endregion
 
                 if (disturb)
+                {
                     Disturb(DisturbType.Hurt, false, true);
+                }
             }
         }
 
@@ -338,8 +337,13 @@ namespace Server.Spells
 
 		public virtual bool OnCasterEquiping(Item item)
 		{
-			if (IsCasting)
+            if (IsCasting)
 			{
+                if ((item.Layer == Layer.OneHanded || item.Layer == Layer.TwoHanded) && item.AllowEquipedCast(Caster))
+                {
+                    return true;
+                }
+
 				Disturb(DisturbType.EquipRequest);
 			}
 
@@ -369,11 +373,6 @@ namespace Server.Spells
 			}
 
 			if (AosAttributes.GetValue(m_Caster, AosAttribute.LowerRegCost) > Utility.Random(100))
-			{
-				return true;
-			}
-
-			if (DuelContext.IsFreeConsume(m_Caster))
 			{
 				return true;
 			}
@@ -421,7 +420,7 @@ namespace Server.Spells
 
 		public virtual double GetResistSkill(Mobile m)
 		{
-			return m.Skills[SkillName.MagicResist].Value;
+			return m.Skills[SkillName.MagicResist].Value - EvilOmenSpell.GetResistMalus(m);
 		}
 
 		public virtual double GetDamageScalar(Mobile target)
@@ -717,7 +716,7 @@ namespace Server.Spells
 			{
 				m_Caster.SendLocalizedMessage(502643); // You can not cast a spell while frozen.
 			}
-			else if (m_Caster.Spell != null && m_Caster.Spell.IsCasting)
+            else if (SkillHandlers.SpiritSpeak.IsInSpiritSpeak(m_Caster) || (m_Caster.Spell != null && m_Caster.Spell.IsCasting))
 			{
 				m_Caster.SendLocalizedMessage(502642); // You are already casting a spell.
 			}
@@ -738,28 +737,12 @@ namespace Server.Spells
 			{
 				m_Caster.SendLocalizedMessage(1072060); // You cannot cast a spell while calmed.
 			}
-				#region Dueling
-			else if (m_Caster is PlayerMobile && ((PlayerMobile)m_Caster).DuelContext != null &&
-					 !((PlayerMobile)m_Caster).DuelContext.AllowSpellCast(m_Caster, this))
-			{ }
-				#endregion
-
 			else if (m_Caster.Mana >= ScaleMana(GetMana()))
 			{
 				#region Stygian Abyss
 				if (m_Caster.Race == Race.Gargoyle && m_Caster.Flying)
 				{
-					var tiles = Caster.Map.Tiles.GetStaticTiles(Caster.X, Caster.Y, true);
-					ItemData itemData;
-					bool cancast = true;
-
-					for (int i = 0; i < tiles.Length && cancast; ++i)
-					{
-						itemData = TileData.ItemTable[tiles[i].ID & TileData.MaxItemValue];
-						cancast = !(itemData.Name == "hover over");
-					}
-
-					if (!cancast)
+                    if (BaseMount.OnFlightPath(m_Caster))
 					{
 						if (m_Caster.IsPlayer())
 						{
@@ -908,7 +891,7 @@ namespace Server.Spells
 
 		public virtual bool CheckFizzle()
 		{
-			if (m_Scroll is BaseWand)
+			if (m_Scroll is BaseWand || m_Caster is BaseCreature)
 			{
 				return true;
 			}

@@ -125,11 +125,11 @@ namespace Server.Items
 
             protected override void OnTick()
             {
-                if (m_Effect.Mobile == null || (m_Effect.Mobile.Deleted || !m_Effect.Mobile.Alive))
+                if (m_Effect.Mobile == null || (m_Effect.Mobile.Deleted || !m_Effect.Mobile.Alive || m_Effect.Mobile.IsDeadBondedPet))
                 {
                     m_Effect.RemoveEffects();
                 }
-                else if (m_Effect.Victim != null && (m_Effect.Victim.Deleted || !m_Effect.Victim.Alive))
+                else if (m_Effect.Victim != null && (m_Effect.Victim.Deleted || !m_Effect.Victim.Alive || m_Effect.Mobile.IsDeadBondedPet))
                 {
                     m_Effect.RemoveEffects();
                 }
@@ -179,7 +179,7 @@ namespace Server.Items
         private bool m_Active;
 
         public SoulChargeContext(Mobile from, Item item)
-            : base(from, null, item, EffectsType.SoulCharge, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15))
+            : base(from, null, item, EffectsType.SoulCharge, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(40))
         {
             m_Active = true;
         }
@@ -191,6 +191,9 @@ namespace Server.Items
                 double mod = BaseFishPie.IsUnderEffects(this.Mobile, FishPieEffect.SoulCharge) ? .50 : .30;
                 this.Mobile.Mana += (int)Math.Min(this.Mobile.ManaMax, damage * mod);
                 m_Active = false;
+
+                Server.Effects.SendTargetParticles(this.Mobile, 0x375A, 0x1, 0xA, 0x71, 0x2, 0x1AE9, (EffectLayer)0, 0);
+
                 this.Mobile.SendLocalizedMessage(1113636); //The soul charge effect converts some of the damage you received into mana.
             }
         }
@@ -198,6 +201,7 @@ namespace Server.Items
         public static void CheckHit(Mobile attacker, Mobile defender, int damage)
         {
             BaseShield shield = defender.FindItemOnLayer(Layer.TwoHanded) as BaseShield;
+
             if (shield != null && shield.ArmorAttributes.SoulCharge > 0 && shield.ArmorAttributes.SoulCharge > Utility.Random(100))
             {
                 SoulChargeContext sc = PropertyEffect.GetContext<SoulChargeContext>(defender, EffectsType.SoulCharge);
@@ -387,112 +391,44 @@ namespace Server.Items
 
     public class SplinteringWeaponContext : PropertyEffect
     {
-        private int m_Level;
-        private bool m_Bleeding;
-
-        public bool Bleeding { get { return m_Bleeding; } }
-
         public SplinteringWeaponContext(Mobile from, Mobile defender, Item weapon)
-            : base(from, defender, weapon, EffectsType.Splintering, TimeSpan.MinValue, TimeSpan.FromSeconds(2))
+            : base(from, defender, weapon, EffectsType.Splintering, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4))
         {
-            m_Bleeding = true;
-            m_Level = 0;
-
             StartForceWalk(defender);
+            BleedAttack.BeginBleed(defender, from, true);
 
-            BuffInfo.AddBuff(defender, new BuffInfo(BuffIcon.SplinteringEffect, 1154670, 1152396));
+            defender.SendLocalizedMessage(1112486); // A shard of the brittle weapon has become lodged in you!
+            from.SendLocalizedMessage(1113077); // A shard of your blade breaks off and sticks in your opponent!
+
+            Server.Effects.PlaySound(defender.Location, defender.Map, 0x1DF);
+
+            BuffInfo.AddBuff(defender, new BuffInfo(BuffIcon.SplinteringEffect, 1154670, 1152144, TimeSpan.FromSeconds(10), defender));
         }
 
         public override void OnTick()
         {
-            m_Level++;
+            base.OnTick();
 
-            if (m_Bleeding)
-                DoBleed(Victim, Mobile, 6 - m_Level);
-
-            if (m_Level > 4)
-            {
-                EndBleed(Victim, true);
-                RemoveEffects();
-                BuffInfo.RemoveBuff(Victim, BuffIcon.SplinteringEffect);
-                return;
-            }
+            BuffInfo.RemoveBuff(Victim, BuffIcon.SplinteringEffect);
         }
 
         public void StartForceWalk(Mobile m)
         {
-            if (m.NetState != null && !TransformationSpellHelper.UnderTransformation(m, typeof(AnimalForm))
-                && m.AccessLevel < AccessLevel.GameMaster)
-                m.Send(SpeedControl.WalkSpeed);
+            if (m.NetState != null && m.AccessLevel < AccessLevel.GameMaster)
+                m.SendSpeedControl(SpeedControlType.WalkSpeed);
         }
 
         public void EndForceWalk(Mobile m)
         {
-		    m.Send( SpeedControl.Disable );
-        }
-
-        public void DoBleed(Mobile m, Mobile from, int level)
-        {
-            if (m.Alive)
-            {
-                int damage = Utility.RandomMinMax(level, level * 2);
-
-                if (!m.Player)
-                    damage *= 2;
-
-                m.PlaySound(0x133);
-                AOS.Damage(m, from, damage, false, 0, 0, 0, 0, 0, 0, 100, false, false, false);
-
-                Blood blood = new Blood();
-
-                blood.ItemID = Utility.Random(0x122A, 5);
-
-                blood.MoveToWorld(m.Location, m.Map);
-            }
-            else
-            {
-                EndBleed(m, false);
-                RemoveEffects();
-
-                BuffInfo.RemoveBuff(m, BuffIcon.SplinteringEffect);
-            }
-        }
-
-        public void EndBleed(Mobile m, bool message)
-        {
-            if (message)
-                m.SendLocalizedMessage(1060167); // The bleeding wounds have healed, you are no longer bleeding!
-
-            EndForceWalk(Victim);
-
-            m_Bleeding = false;
+            m.SendSpeedControl(SpeedControlType.Disable);
         }
 
         public override void RemoveEffects()
         {
             EndForceWalk(Victim);
+            Victim.SendLocalizedMessage(1112487); // The shard is successfully removed.
 
             base.RemoveEffects();
-        }
-
-        public static void EndBleeding(Mobile m, bool message = true)
-        {
-            foreach (PropertyEffect effect in PropertyEffect.Effects)
-            {
-                if (effect is SplinteringWeaponContext && ((SplinteringWeaponContext)effect).Victim == m && ((SplinteringWeaponContext)effect).Bleeding)
-                    ((SplinteringWeaponContext)effect).EndBleed(m, message);
-            }
-        }
-
-        public static bool IsBleeding(Mobile m)
-        {
-            foreach (PropertyEffect effect in PropertyEffect.Effects)
-            {
-                if (effect is SplinteringWeaponContext && ((SplinteringWeaponContext)effect).Victim == m && ((SplinteringWeaponContext)effect).Bleeding)
-                    return true;
-            }
-
-            return false;
         }
 
         public static bool CheckHit(Mobile attacker, Mobile defender, Item weapon)

@@ -78,6 +78,42 @@ namespace Server.Items
             SetSecureLevelEntry.AddTo(from, this, list);
         }
 
+        public override void GetChildContextMenuEntries(Mobile from, List<ContextMenuEntry> list, Item item)
+        {
+            if (IsLockedDown)
+            {
+                BaseHouse house = BaseHouse.FindHouseAt(this);
+                bool owner = house.IsOwner(from);
+
+                if (house != null)
+                {
+                    if (owner && house != null && house.IsLockedDown(this) && house.IsLockedDown(item))
+                    {
+                        list.Add(new ReleaseEntry(from, item, house));
+                    }
+
+                    if (!(item is BaseContainer))
+                    {
+                        var myInfo = house.GetSecureInfoFor(from, this);
+
+                        if (myInfo != null)
+                        {
+                            if (house.Secures.FirstOrDefault(i => i.Item == item) == null)
+                            {
+                                house.Secures.Add(new SecureInfo(item, SecureLevel.Owner, from, true));
+                            }
+
+                            SetSecureLevelEntry.AddTo(from, item, list);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                base.GetChildContextMenuEntries(from, list, item);
+            }
+        }
+
         public override bool TryDropItem(Mobile from, Item dropped, bool sendFullMessage)
         {
             if (!CheckHold(from, dropped, sendFullMessage, !CheckStack(from, dropped)))
@@ -222,10 +258,15 @@ namespace Server.Items
 
         public override void OnDoubleClick(Mobile from)
         {
-            if (from.IsStaff() || from.InRange(GetWorldLocation(), 2) || RootParent is PlayerVendor)
+            if (from.IsStaff() || RootParent is PlayerVendor ||
+                (from.InRange(GetWorldLocation(), 2) && (Parent != null || (Z >= from.Z - 8 && Z <= from.Z + 16))))
+            {
                 Open(from);
+            }
             else
+            {
                 from.LocalOverheadMessage(MessageType.Regular, 0x3B2, 1019045); // I can't reach that.
+            }
         }
 
 		public override void AddNameProperty(ObjectPropertyList list)
@@ -1221,6 +1262,69 @@ namespace Server.Items
 
             if (version == 0 && Weight == 15)
                 Weight = -1;
+        }
+    }
+
+    [Furniture]
+    [FlipableAttribute(0x4026, 0x4025)]
+    public class GargishChest : LockableContainer
+    {
+        public override int DefaultGumpID { get { return 0x42; } }
+
+        [Constructable]
+        public GargishChest()
+            : base(0x4026)
+        {
+            Weight = 1.0;
+        }
+
+        public GargishChest(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+            writer.Write((int)0); // version 
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+            int version = reader.ReadInt();
+        }
+    }
+
+    [Furniture]
+    [FlipableAttribute(0xA99, 0xA97)]
+    public class AcademicBookCase : BaseContainer
+    {
+        public override int LabelNumber { get { return 1071213; } } // academic bookcase
+        public override int DefaultGumpID { get { return 0x4D; } }
+
+        [Constructable]
+        public AcademicBookCase()
+            : base(0xA99)
+        {
+            Weight = 11.0;
+        }
+
+        public AcademicBookCase(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+            int version = reader.ReadInt();
         }
     }
 }

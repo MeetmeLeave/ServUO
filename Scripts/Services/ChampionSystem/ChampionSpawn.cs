@@ -395,6 +395,9 @@ namespace Server.Engines.CannedEvil
                 Level = 1;
             else
                 Level = 0;
+
+            if (Level > 0)
+                AdvanceLevel();
         }
 
         public void Stop()
@@ -1496,6 +1499,7 @@ namespace Server.Engines.CannedEvil
         public static void Initialize()
         {
             EventSink.Logout += OnLogout;
+            EventSink.Login += OnLogin;
         }
 
         public override bool YoungProtected

@@ -107,9 +107,17 @@ namespace Server.Engines.CityLoyalty
                     string name = null;
 
                     Type t = GetRandomTrade(origin, destination, ref worth, ref name);
-                    int amount = Utility.RandomList(5, 10, 15, 20);
 
-                    entry.Details.Add(new TradeEntry.TradeDetails(t, worth, amount, name));
+                    if (t != null)
+                    {
+                        int amount = Utility.RandomList(5, 10, 15, 20);
+                        entry.Details.Add(new TradeEntry.TradeDetails(t, worth, amount, name));
+                    }
+                    else
+                    {
+                        minister.SayTo(from, "There are no trades available at this time.");
+                        return false;
+                    }
                 }
 
 				if(from.Backpack == null || !from.Backpack.TryDropItem(from, crate, false))
@@ -294,8 +302,10 @@ namespace Server.Engines.CityLoyalty
         public static Type GetRandomTrade(City originCity, City dest, ref int worth, ref string name)
         {
             Region region = CityLoyaltySystem.GetCityInstance(originCity).Definition.Region;
-
             List<BaseVendor> list = new List<BaseVendor>(region.GetEnumeratedMobiles().OfType<BaseVendor>().Where(bv => bv.GetBuyInfo() != null && bv.GetBuyInfo().Length > 0));
+
+            if (list.Count == 0)
+                return null;
 
             do
             {
@@ -456,6 +466,15 @@ namespace Server.Engines.CityLoyalty
                     bc.RawStr += (int)(bc.RawStr * difficulty);
                     bc.RawInt += (int)(bc.RawInt * difficulty);
                     bc.RawDex += (int)(bc.RawDex * difficulty);
+                    
+                    if (bc.HitsMaxSeed == -1)
+                        bc.HitsMaxSeed = bc.RawStr;
+
+                    if (bc.StamMaxSeed == -1)
+                        bc.StamMaxSeed = bc.RawDex;
+
+                    if (bc.ManaMaxSeed == -1)
+                        bc.ManaMaxSeed = bc.RawInt;
 
                     bc.HitsMaxSeed += (int)(bc.HitsMaxSeed * difficulty);
                     bc.StamMaxSeed += (int)(bc.StamMaxSeed * difficulty);
@@ -656,7 +675,7 @@ namespace Server.Engines.CityLoyalty
 			public override void Serialize(GenericWriter writer)
 			{
 				base.Serialize(writer);
-				writer.Write(0);
+				writer.Write(1);
 				
 				writer.Write(Canceled);
 				writer.Write(DistanceTraveled);
@@ -702,6 +721,15 @@ namespace Server.Engines.CityLoyalty
                             Ambushers[bc] = dt;
                         }
                     }
+                }
+
+                if (version == 0)
+                {
+                    Timer.DelayCall(() =>
+                        {
+                            if (Player.RemoveRewardTitle(2303807, true))
+                                Player.AddRewardTitle(1151739);
+                        });
                 }
 			}
 		}

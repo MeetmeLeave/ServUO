@@ -141,6 +141,11 @@ namespace Server.Engines.BulkOrders
             }
         }
 
+        public static double GetBODSkill(Mobile m, SkillName skill)
+        {
+            return Math.Max(m.Skills[skill].Base, m.GetRacialSkillBonus(skill));
+        }
+
         public static List<CollectionItem> GetRewardCollection(BODType type)
         {
             switch (type)
@@ -192,26 +197,6 @@ namespace Server.Engines.BulkOrders
 
                     return true;
                 }
-                /*int cached = context.Entries[type].CachedDeeds;
-
-                if (cached > 0)
-                {
-                    if (cached == MaxCachedDeeds)
-                    {
-                        context.Entries[type].LastBulkOrder = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        //TimeSpan remainder = last - TimeSpan.FromHours(Delay);
-                        TimeSpan remainder = (DateTime.UtcNow - last) + TimeSpan.FromHours(Delay);
-
-                        context.Entries[type].LastBulkOrder = DateTime.UtcNow - remainder;
-                    }
-
-                    context.Entries[type].CachedDeeds--;
-
-                    return true;
-                }*/
             }
 
             return false;
@@ -462,37 +447,6 @@ namespace Server.Engines.BulkOrders
             }
 
             return 0;
-        }
-
-        /* Tinkering needs conditional check for combining:
-        * SpoonLeft/SpoonRight, ForkLeft/ForkRight, KnifeLeft/KnifeRight, ClockRight/ClockLeft
-         * TODO: Craft and make sure they show crafter/exceptional etc
-        */
-        private static Type[][] _TinkerTable =
-        {
-            new Type[] { typeof(Spoon), typeof(SpoonRight), typeof(SpoonLeft) },
-            new Type[] { typeof(Fork), typeof(ForkRight), typeof(ForkLeft) },
-            new Type[] { typeof(Knife), typeof(KnifeRight), typeof(KnifeLeft) },
-            new Type[] { typeof(Clock), typeof(ClockRight), typeof(ClockLeft) },
-            new Type[] { typeof(GoldRing), typeof(SilverRing) },
-            new Type[] { typeof(GoldBracelet), typeof(SilverBracelet) },
-        };
-
-        public static bool CheckTinker(Type actual, Type lookingfor)
-        {
-            foreach (Type[] types in _TinkerTable)
-            {
-                if (types[0] == lookingfor)
-                {
-                    foreach (Type t in types)
-                    {
-                        if (actual == t)
-                            return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         public static bool CanExchangeBOD(Mobile from, BaseVendor vendor, IBOD bod, int cost)

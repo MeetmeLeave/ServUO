@@ -83,9 +83,7 @@ namespace Server.Items
                 return;
             }
 
-            if (HarvestSystem is Mining)
-                from.SendLocalizedMessage(503033); // Where do you wish to dig?
-            else
+            if (!(HarvestSystem is Mining))
                 from.SendLocalizedMessage(1010018); // What do you want to use this item on?
 
             HarvestSystem.BeginHarvesting(from, this);
@@ -139,7 +137,7 @@ namespace Server.Items
         {
             base.OnHit(attacker, defender, damageBonus);
 
-            if (!Core.AOS && defender is Mobile && (attacker.Player || attacker.Body.IsHuman) && Layer == Layer.TwoHanded && (attacker.Skills[SkillName.Anatomy].Value / 400.0) >= Utility.RandomDouble() && Engines.ConPVP.DuelContext.AllowSpecialAbility(attacker, "Concussion Blow", false))
+            if (!Core.AOS && defender is Mobile && (attacker.Player || attacker.Body.IsHuman) && Layer == Layer.TwoHanded && (attacker.Skills[SkillName.Anatomy].Value / 400.0) >= Utility.RandomDouble())
             {
                 StatMod mod = ((Mobile)defender).GetStatMod("Concussion");
 

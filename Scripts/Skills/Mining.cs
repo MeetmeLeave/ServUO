@@ -2,6 +2,7 @@ using System;
 using Server.Items;
 using Server.Mobiles;
 using Server.Targeting;
+using System.Linq;
 
 namespace Server.Engines.Harvest
 {
@@ -74,7 +75,7 @@ namespace Server.Engines.Harvest
             oreAndStone.ConsumedPerFeluccaHarvest = 2;
 
             // The digging effect
-            oreAndStone.EffectActions = new int[] { 11 };
+            oreAndStone.EffectActions = new int[] { Core.SA ? 3 : 11 };
             oreAndStone.EffectSounds = new int[] { 0x125, 0x126 };
             oreAndStone.EffectCounts = new int[] { 1 };
             oreAndStone.EffectDelay = TimeSpan.FromSeconds(1.6);
@@ -168,7 +169,7 @@ namespace Server.Engines.Harvest
             sand.ConsumedPerFeluccaHarvest = 2;
 
             // The digging effect
-            sand.EffectActions = new int[] { 11 };
+            sand.EffectActions = new int[] { Core.SA ? 3 : 11 };
             sand.EffectSounds = new int[] { 0x125, 0x126 };
             sand.EffectCounts = new int[] { 6 };
             sand.EffectDelay = TimeSpan.FromSeconds(1.6);
@@ -234,6 +235,30 @@ namespace Server.Engines.Harvest
             return base.GetResourceType(from, tool, def, map, loc, resource);
         }
 
+        public override void SendSuccessTo(Mobile from, Item item, HarvestResource resource)
+        {
+            if (item is BaseGranite)
+                from.SendLocalizedMessage(1044606); // You carefully extract some workable stone from the ore vein!
+            else if (item is IGem)
+                from.SendLocalizedMessage(1112233); // You carefully extract a glistening gem from the vein!
+            else if (item != null)
+            {
+                foreach (var res in OreAndStone.Resources.Where(r => r.Types != null))
+                {
+                    foreach (var type in res.Types)
+                    {
+                        if (item.GetType() == type)
+                        {
+                            res.SendSuccessTo(from);
+                            return;
+                        }
+                    }
+                }
+
+                base.SendSuccessTo(from, item, resource);
+            }
+        }
+
         public override bool CheckResources(Mobile from, Item tool, HarvestDefinition def, Map map, Point3D loc, bool timed)
         {
             if (HarvestMap.CheckMapOnHarvest(from, loc, def) == null)
@@ -247,28 +272,13 @@ namespace Server.Engines.Harvest
             if (!base.CheckHarvest(from, tool))
                 return false;
 
-            if (from.Mounted)
-            {
-                from.SendLocalizedMessage(501864); // You can't mine while riding.
-                return false;
-            }
-            else if (from.IsBodyMod && !from.Body.IsHuman)
+            if (from.IsBodyMod && !from.Body.IsHuman)
             {
                 from.SendLocalizedMessage(501865); // You can't mine while polymorphed.
                 return false;
             }
 
             return true;
-        }
-
-        public override void SendSuccessTo(Mobile from, Item item, HarvestResource resource)
-        {
-            if (item is BaseGranite)
-                from.SendLocalizedMessage(1044606); // You carefully extract some workable stone from the ore vein!
-            else if (item is IGem)
-                from.SendLocalizedMessage(1112233); // You carefully extract a glistening gem from the vein!
-            else
-                base.SendSuccessTo(from, item, resource);
         }
 
         public override bool CheckHarvest(Mobile from, Item tool, HarvestDefinition def, object toHarvest)
@@ -483,9 +493,17 @@ namespace Server.Engines.Harvest
         public override void OnBadHarvestTarget(Mobile from, Item tool, object toHarvest)
         {
             if (toHarvest is LandTarget)
+            {
                 from.SendLocalizedMessage(501862); // You can't mine there.
-            else
+            }            
+            else if (!(toHarvest is LandTarget))
+            {
                 from.SendLocalizedMessage(501863); // You can't mine that.
+            }
+            else if (from.Mounted || from.Flying)
+            {
+                from.SendLocalizedMessage(501864); // You can't dig while riding or flying.
+            }
         }
 
         #region Tile lists

@@ -567,14 +567,18 @@ namespace Server
         public Point3D m_Location, m_WorldLoc;
         public object m_Parent;
         public IEntity m_ParentStack;
+        public byte m_GridLocation;
+        public Mobile m_Mobile;
 
-        public BounceInfo(Item item)
+        public BounceInfo(Mobile from, Item item)
         {
             m_Map = item.Map;
             m_Location = item.Location;
             m_WorldLoc = item.GetWorldLocation();
             m_Parent = item.Parent;
             m_ParentStack = null;
+            m_GridLocation = item.GridLocation;
+            m_Mobile = from;
         }
 
         private BounceInfo(Map map, Point3D loc, Point3D worldLoc, object parent)
@@ -1130,11 +1134,11 @@ namespace Server
             return null;
         }
 
-        public void RecordBounce(Item parentstack = null)
+        public void RecordBounce(Mobile from, Item parentstack = null)
         {
             CompactInfo info = AcquireCompactInfo();
 
-            info.m_Bounce = new BounceInfo(this);
+            info.m_Bounce = new BounceInfo(from, this);
             info.m_Bounce.m_ParentStack = parentstack;
         }
 
@@ -1384,11 +1388,6 @@ namespace Server
                 AddLockedDownProperty(list);
             }
 
-            if (HonestyItem)
-            {
-                AddHonestyProperty(list);
-            }
-
             Mobile blessedFor = BlessedFor;
 
             if (blessedFor != null && !blessedFor.Deleted)
@@ -1450,6 +1449,12 @@ namespace Server
         {
             if (HonestyItem)
             {
+                if (m_HonestyPickup != DateTime.MinValue)
+                {
+                    int minutes = (int)(m_HonestyPickup + TimeSpan.FromHours(3) - DateTime.UtcNow).TotalMinutes;
+                    list.Add(1151914, minutes.ToString()); // Minutes remaining for credit: ~1_val~
+                }
+
                 list.Add(1151520); // lost item (Return to gain Honesty)
             }
         }
@@ -1559,6 +1564,7 @@ namespace Server
                     if (p.IsAccessibleTo(from) && (!(root is Mobile) || ((Mobile)root).CheckNonlocalDrop(from, this, p)))
                     {
                         Location = bounce.m_Location;
+
                         p.AddItem(this);
                     }
                     else
@@ -1939,6 +1945,8 @@ namespace Server
 
         public void CheckHonestyExpiry()
         {
+            InvalidateProperties();
+
             if ((m_HonestyPickup + TimeSpan.FromHours(3)) < DateTime.UtcNow)
             {
                 HonestyItem = false;
@@ -2538,7 +2546,6 @@ namespace Server
         {
             writer.Write(11); // version
 
-            //version 11
             writer.Write(m_GridLocation);
 
             //version 10
@@ -3011,10 +3018,8 @@ namespace Server
             switch (version)
             {
                 case 11:
-                    {
-                        m_GridLocation = reader.ReadByte();
-                        goto case 10;
-                    }
+                    m_GridLocation = reader.ReadByte();
+                    goto case 10;
                 case 10:
                     {
                         m_HonestyPickup = reader.ReadDateTime();
@@ -3541,7 +3546,11 @@ namespace Server
                 Timer.DelayCall(TimeSpan.Zero, FixHolding_Sandbox);
             }
 
-            //if ( version < 9 )
+            if (m_Parent is Container)
+            {
+                ((Container)m_Parent).SetPosition(m_GridLocation, this);
+            }
+
             VerifyCompactInfo();
         }
 
@@ -3566,7 +3575,7 @@ namespace Server
 
         public virtual int GetMaxUpdateRange()
         {
-            return 24;
+            return Core.GlobalMaxUpdateRange;
         }
 
         public virtual int GetUpdateRange(Mobile m)

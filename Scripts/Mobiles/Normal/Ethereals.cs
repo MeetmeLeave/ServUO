@@ -720,7 +720,7 @@ namespace Server.Mobiles
     {
         [Constructable]
         public EtherealRidgeback()
-            : base(0x2615, 0x3E9A, 0x3EBA)
+            : base(0x2615, 0x3E9A, 0x3EBA, DefaultEtherealHue)
         { }
 
         public EtherealRidgeback(Serial serial)
@@ -732,7 +732,7 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(1); // version
+            writer.Write(2); // version
         }
 
         public override void Deserialize(GenericReader reader)
@@ -746,6 +746,11 @@ namespace Server.Mobiles
                 NonTransparentMountedID = 0x3EBA;
                 Transparent = true;
             }
+
+            if (version == 1)
+            {
+                TransparentMountedHue = DefaultEtherealHue;
+            }
         }
     }
 
@@ -753,7 +758,7 @@ namespace Server.Mobiles
     {
         [Constructable]
         public EtherealUnicorn()
-            : base(0x25CE, 0x3E9B, 0x3EB4)
+            : base(0x25CE, 0x3E9B, 0x3EB4, DefaultEtherealHue)
         { }
 
         public EtherealUnicorn(Serial serial)
@@ -765,7 +770,7 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(1); // version
+            writer.Write(2); // version
         }
 
         public override void Deserialize(GenericReader reader)
@@ -779,6 +784,11 @@ namespace Server.Mobiles
                 NonTransparentMountedID = 0x3EB4;
                 Transparent = true;
             }
+
+            if (version == 1)
+            {
+                TransparentMountedHue = DefaultEtherealHue;
+            }
         }
     }
 
@@ -786,7 +796,7 @@ namespace Server.Mobiles
     {
         [Constructable]
         public EtherealBeetle()
-            : base(0x260F, 0x3E97, 0x3EBC)
+            : base(0x260F, 0x3E97, 0x3EBC, DefaultEtherealHue)
         { }
 
         public EtherealBeetle(Serial serial)
@@ -798,7 +808,7 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(1); // version
+            writer.Write(2); // version
         }
 
         public override void Deserialize(GenericReader reader)
@@ -812,6 +822,11 @@ namespace Server.Mobiles
                 NonTransparentMountedID = 0x3EBC;
                 Transparent = true;
             }
+
+            if (version == 1)
+            {
+                TransparentMountedHue = DefaultEtherealHue;
+            }
         }
     }
 
@@ -819,7 +834,7 @@ namespace Server.Mobiles
     {
         [Constructable]
         public EtherealKirin()
-            : base(0x25A0, 0x3E9C, 0x3EAD)
+            : base(0x25A0, 0x3E9C, 0x3EAD, DefaultEtherealHue)
         { }
 
         public EtherealKirin(Serial serial)
@@ -831,7 +846,7 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(1); // version
+            writer.Write(2); // version
         }
 
         public override void Deserialize(GenericReader reader)
@@ -844,6 +859,11 @@ namespace Server.Mobiles
             {
                 NonTransparentMountedID = 0x3EAD;
                 Transparent = true;
+            }
+
+            if (version == 1)
+            {
+                TransparentMountedHue = DefaultEtherealHue;
             }
         }
     }
@@ -1225,11 +1245,59 @@ namespace Server.Mobiles
         public EtherealLasher()
             : base(0x9E35, 0x3ECB, 0x3ECB, DefaultEtherealHue)
         {
-            Name = "Ethereal Lasher Statuette";
             Transparent = false;
         }
 
         public EtherealLasher(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override bool Validate(Mobile from)
+        {
+            #region TOL
+            if (from.NetState != null && !from.NetState.SupportsExpansion(Expansion.ML))
+            {
+                from.SendLocalizedMessage(1156139); // * You must upgrade to the Time of Legends in order to use this. *                               
+                return false;
+            }
+            #endregion
+
+            return base.Validate(from);
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+
+            writer.Write((int)1); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+
+            int version = reader.ReadInt();
+
+            if (version == 0)
+            {
+                Transparent = false;
+            }
+        }
+    }
+
+    public class EtherealSerpentineDragon : EtherealMount
+    {
+        public override int LabelNumber { get { return 1157995; } } // Ethereal Dragon Statuette
+
+        [Constructable]
+        public EtherealSerpentineDragon()
+            : base(0xA010, 0x3ECE, 0x3ECE, DefaultEtherealHue)
+        {
+            Transparent = false;
+        }
+
+        public EtherealSerpentineDragon(Serial serial)
             : base(serial)
         {
         }

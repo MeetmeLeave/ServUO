@@ -155,11 +155,10 @@ namespace Server.Engines.Harvest
             HarvestResource resource = MutateResource(from, tool, def, map, loc, vein, primary, fallback);
 
             double skillBase = from.Skills[def.Skill].Base;
-            double skillValue = from.Skills[def.Skill].Value;
 
             Type type = null;
 
-            if (skillBase >= resource.ReqSkill && from.CheckSkill(def.Skill, resource.MinSkill, resource.MaxSkill))
+            if(CheckHarvestSkill(map, loc, from, resource, def))
             {
                 type = GetResourceType(from, tool, def, map, loc, resource);
 
@@ -227,7 +226,7 @@ namespace Server.Engines.Harvest
 								}
 								else
 								{
-									item.Delete();
+                                    bonusItem.Delete();
 								}
 							}
                         }
@@ -260,6 +259,11 @@ namespace Server.Engines.Harvest
                 def.SendMessageTo(from, def.FailMessage);
 
             OnHarvestFinished(from, tool, def, vein, bank, resource, toHarvest);
+        }
+
+        public virtual bool CheckHarvestSkill(Map map, Point3D loc, Mobile from, HarvestResource resource, HarvestDefinition def)
+        {
+            return from.Skills[def.Skill].Value >= resource.ReqSkill && from.CheckSkill(def.Skill, resource.MinSkill, resource.MaxSkill);
         }
 
         public virtual void OnToolUsed(Mobile from, Item tool, bool caughtSomething)
@@ -312,13 +316,17 @@ namespace Server.Engines.Harvest
 
             Map map = m.Map;
 
-            if (map == null)
+            if (map == null || map == Map.Internal)
                 return false;
 
             List<Item> atFeet = new List<Item>();
 
-            foreach (Item obj in m.GetItemsInRange(0))
+            IPooledEnumerable eable = m.GetItemsInRange(0);
+
+            foreach (Item obj in eable)
                 atFeet.Add(obj);
+
+            eable.Free();
 
             for (int i = 0; i < atFeet.Count; ++i)
             {
@@ -327,6 +335,8 @@ namespace Server.Engines.Harvest
                 if (check.StackWith(m, item, false))
                     return true;
             }
+
+            ColUtility.Free(atFeet);
 
             item.MoveToWorld(m.Location, map);
             return true;
@@ -418,7 +428,16 @@ namespace Server.Engines.Harvest
             from.Direction = from.GetDirectionTo(loc);
 
             if (!from.Mounted)
-                from.Animate(Utility.RandomList(def.EffectActions), 5, 1, true, false, 0);
+            {
+                if (Core.SA)
+                {
+                    from.Animate(AnimationType.Attack, Utility.RandomList(def.EffectActions));
+                }
+                else
+                {
+                    from.Animate(Utility.RandomList(def.EffectActions), 5, 1, true, false, 0);
+                }
+            }
         }
 
         public virtual HarvestDefinition GetDefinition(int tileID)

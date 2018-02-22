@@ -56,13 +56,13 @@ namespace Server.Engines.Craft
             return true;
         }
 
-        public override int CanCraft(Mobile from, BaseTool tool, Type itemType)
+        public override int CanCraft(Mobile from, ITool tool, Type itemType)
         {
             int num = 0;
 
             if (tool == null || tool.Deleted || tool.UsesRemaining <= 0)
                 return 1044038; // You have worn out your tool!
-            else if (!BaseTool.CheckTool(tool, from))
+            else if (tool is Item && !BaseTool.CheckTool((Item)tool, from))
                 return 1048146; // If you have a tool equipped, you must use that tool.
             else if (!(from is PlayerMobile && ((PlayerMobile)from).Masonry && from.Skills[SkillName.Carpentry].Base >= 100.0))
                 return 1044633; // You havent learned stonecraft.
@@ -168,7 +168,7 @@ namespace Server.Engines.Craft
             AddCraft(typeof(StatueSouth), 1044503, 1044505, 60.0, 110.0, typeof(Granite), 1044514, 3, 1044513);
             AddCraft(typeof(StatueNorth), 1044503, 1044506, 60.0, 110.0, typeof(Granite), 1044514, 3, 1044513);
             AddCraft(typeof(StatueEast), 1044503, 1044507, 60.0, 110.0, typeof(Granite), 1044514, 3, 1044513);
-            AddCraft(typeof(StatuePegasus), 1044503, 1044510, 70.0, 120.0, typeof(Granite), 1044514, 4, 1044513);
+            AddCraft(typeof(StatuePegasusSouth), 1044503, 1044510, 70.0, 120.0, typeof(Granite), 1044514, 4, 1044513);
             AddCraft(typeof(StatueGargoyleEast), 1044503, 1097637, 91.0, 110.5, typeof(Granite), 1044514, 20, 1044513);
             AddCraft(typeof(StatueGryphonEast), 1044503, 1097619, 91.0, 110.5, typeof(Granite), 1044514, 15, 1044513);
             

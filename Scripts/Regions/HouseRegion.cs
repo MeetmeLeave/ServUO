@@ -5,6 +5,7 @@ using Server.Mobiles;
 using Server.Multis;
 using System.Collections.Generic;
 using Server.ContextMenus;
+using System.Linq;
 
 namespace Server.Regions
 {
@@ -190,28 +191,12 @@ namespace Server.Regions
 
         public override void GetContextMenuEntries(Mobile from, List<ContextMenuEntry> list, Item item)
         {
-            if (m_House.IsOwner(from) && item.Parent == null && m_House.IsLockedDown(item))
+            if (m_House.IsOwner(from) && item.Parent == null && (m_House.IsLockedDown(item) || m_House.IsSecure(item)))
             {
-                list.Add(new SimpleContextMenuEntry(from, 1153880, m => // Retrieve
-                    {
-                        if (BaseHouse.FindHouseAt(m) == m_House && m_House.IsOwner(m))
-                        {
-                            if (m.Backpack == null || !m.Backpack.CheckHold(m, item, false))
-                            {
-                                m.SendLocalizedMessage(1153881); // Your pack cannot hold this
-                            }
-                            else
-                            {
-                                m_House.Release(m, item);
-                                m.Backpack.DropItem(item);
-                            }
-                        }
-                        else
-                        {
-                            m.SendLocalizedMessage(1153882); // You do not own that.
-                        }
-                    }, 8));
+                list.Add(new ReleaseEntry(from, item, m_House));
             }
+
+            base.GetContextMenuEntries(from, list, item);
         }
 
         public override bool OnDecay(Item item)
@@ -312,14 +297,10 @@ namespace Server.Regions
             }
             else if (e.HasKeyword(0x23)) // I wish to lock this down
             {
-                if (isCoOwner)
+                if (isFriend)
                 {
                     from.SendLocalizedMessage(502097); // Lock what down?
                     from.Target = new LockdownTarget(false, m_House);
-                }
-                else if (isFriend)
-                {
-                    from.SendLocalizedMessage(1010587); // You are not a co-owner of this house.
                 }
                 else
                 {
@@ -328,14 +309,10 @@ namespace Server.Regions
             }
             else if (e.HasKeyword(0x24)) // I wish to release this
             {
-                if (isCoOwner)
+                if (isFriend)
                 {
                     from.SendLocalizedMessage(502100); // Choose the item you wish to release
                     from.Target = new LockdownTarget(true, m_House);
-                }
-                else if (isFriend)
-                {
-                    from.SendLocalizedMessage(1010587); // You are not a co-owner of this house.
                 }
                 else
                 {
@@ -344,7 +321,7 @@ namespace Server.Regions
             }
             else if (e.HasKeyword(0x25)) // I wish to secure this
             {
-                if (isOwner)
+                if (isCoOwner)
                 {
                     from.SendLocalizedMessage(502103); // Choose the item you wish to secure
                     from.Target = new SecureTarget(false, m_House);

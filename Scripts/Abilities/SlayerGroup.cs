@@ -137,7 +137,8 @@ namespace Server.Items
                     typeof(Niporailem), typeof(DreamWraith),
                     typeof(EffeteUndeadGargoyle), typeof(UndeadGargoyle),
                     typeof(UndeadGuardian), typeof(PutridUndeadGargoyle),
-                    typeof(PutridUndeadGuardian), typeof(Juonar)
+                    typeof(PutridUndeadGuardian), typeof(Juonar),
+                    typeof(Spellbinder)
                 );
 
             undead.Entries = new SlayerEntry[0];
@@ -534,14 +535,14 @@ namespace Server.Items
                     (
                         SlayerName.SnakesBane,
 
-                        typeof(Serado),         typeof(DeepSeaSerpent),
-                        typeof(GiantIceWorm),   typeof(GiantSerpent),
-                        typeof(IceSerpent),     typeof(IceSnake),
-                        typeof(LavaSerpent),    typeof(LavaSnake),
-                        typeof(SeaSerpent),     typeof(Serado),
-                        typeof(SilverSerpent),  typeof(Snake),
-                        typeof(Yamandon),       typeof(CrystalSeaSerpent),
-                        typeof(Coil),           typeof(CoralSnake)
+                        typeof(CrystalSeaSerpent),  typeof(Coil),
+                        typeof(CoralSnake),         typeof(DeepSeaSerpent),
+                        typeof(GiantIceWorm),       typeof(GiantSerpent),
+                        typeof(IceSerpent),         typeof(IceSnake),
+                        typeof(LavaSerpent),        typeof(LavaSnake),
+                        typeof(SeaSerpent),         typeof(Serado),
+                        typeof(SilverSerpent),      typeof(Snake),
+                        typeof(Yamandon)
                     )
             };
 
@@ -561,7 +562,7 @@ namespace Server.Items
                     typeof(TribeWarrior), typeof(TribeShaman), 
                     typeof(TribeChieftan), typeof(WildTiger), 
                     typeof(WildBlackTiger), typeof(WildWhiteTiger), 
-                    typeof(SilverbackGorilla));
+                    typeof(TRex), typeof(SilverbackGorilla));
 
             eodon.Entries = new SlayerEntry[] { };
 
@@ -581,7 +582,7 @@ namespace Server.Items
                     typeof(Archaeosaurus), typeof(Najasaurus),
                     typeof(Saurosaurus), typeof(Allosaurus),
                     typeof(MyrmidexLarvae), typeof(MyrmidexDrone),
-                    typeof(MyrmidexWarrior));
+                    typeof(TRex), typeof(MyrmidexWarrior));
 
             dino.Entries = new SlayerEntry[] { };
 
@@ -741,6 +742,18 @@ namespace Server.Items
             }
 
             return entries;
+        }
+
+        public static SlayerName RandomSuperSlayerAOS(bool excludeFey = true)
+        {
+            int maxIndex = excludeFey ? 5 : 6;
+
+            return Groups[Utility.Random(maxIndex)].Super.Name;
+        }
+
+        public static SlayerName RandomSuperSlayerTOL()
+        {
+            return Groups[Utility.Random(Groups.Length)].Super.Name;
         }
     }
 }

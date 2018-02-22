@@ -23,11 +23,6 @@ namespace Server.Items
 
 		public override double DefaultWeight { get { return 0.1; } }
 
-		public static void Initialize()
-		{
-			EventSink.BandageTargetRequest += EventSink_BandageTargetRequest;
-		}
-
 		[Constructable]
 		public Bandage()
 			: this(1)
@@ -87,16 +82,10 @@ namespace Server.Items
 			}
 		}
 
-		private static void EventSink_BandageTargetRequest(BandageTargetRequestEventArgs e)
+        public static void BandageTargetRequest(Bandage b, Mobile from, Mobile target)
 		{
-			Bandage b = e.Bandage as Bandage;
-
-			if (b == null || b.Deleted)
-			{
-				return;
-			}
-
-			Mobile from = e.Mobile;
+            if (b.Deleted)
+                return;
 
 			if (from.InRange(b.GetWorldLocation(), Range))
 			{
@@ -109,10 +98,9 @@ namespace Server.Items
 				}
 
 				from.RevealingAction();
-
 				from.SendLocalizedMessage(500948); // Who will you use the bandages on?
 
-				new InternalTarget(b).Invoke(from, e.Target);
+                new InternalTarget(b).Invoke(from, target);
 			}
 			else
 			{
@@ -271,7 +259,7 @@ namespace Server.Items
 
         public void CheckPoisonOrBleed()
         {
-            bool bleeding = BleedAttack.IsBleeding(m_Patient) || SplinteringWeaponContext.IsBleeding(m_Patient);
+            bool bleeding = BleedAttack.IsBleeding(m_Patient);
             bool poisoned = m_Patient.Poisoned;
 
             if (bleeding || poisoned)
@@ -298,10 +286,6 @@ namespace Server.Items
                         if (BleedAttack.IsBleeding(m_Patient))
                         {
                             BleedAttack.EndBleed(m_Patient, false);
-                        }
-                        else
-                        {
-                            SplinteringWeaponContext.EndBleeding(m_Patient, false);
                         }
 
                         m_Patient.SendLocalizedMessage(1060088); // You bind the wound and stop the bleeding
@@ -343,7 +327,8 @@ namespace Server.Items
                 double chance = ((healing - 68.0) / 50.0) - (m_Slips * 0.02);
 
                 if (((checkSkills = (healing >= 80.0 && anatomy >= 80.0)) && chance > Utility.RandomDouble()) ||
-                    (Core.SE && petPatient is FactionWarHorse && petPatient.ControlMaster == m_Healer))
+                    (Core.SE && petPatient is FactionWarHorse && petPatient.ControlMaster == m_Healer) ||
+                    (Server.Engines.VvV.ViceVsVirtueSystem.Enabled && petPatient is Server.Engines.VvV.VvVMount && petPatient.ControlMaster == m_Healer))
                 //TODO: Dbl check doesn't check for faction of the horse here?
                 {
                     if (m_Patient.Map == null || !m_Patient.Map.CanFit(m_Patient.Location, 16, false, false))
@@ -467,13 +452,6 @@ namespace Server.Items
 
                 BleedAttack.EndBleed(m_Patient, false);
             }
-            else if (SplinteringWeaponContext.IsBleeding(m_Patient))
-            {
-                healerNumber = 1060088; // You bind the wound and stop the bleeding
-                patientNumber = 1060167; // The bleeding wounds have healed, you are no longer bleeding!
-
-                SplinteringWeaponContext.EndBleeding(m_Patient);
-            }
             else if (MortalStrike.IsWounded(m_Patient))
             {
                 healerNumber = (m_Healer == m_Patient ? 1005000 : 1010398);
@@ -495,7 +473,8 @@ namespace Server.Items
                 double chance = ((healing + 10.0) / 100.0) - (m_Slips * 0.02);
 
                 #region Heritage Items
-                healing += EnhancedBandage.HealingBonus;
+                if( m_Enhanced )
+                    healing += EnhancedBandage.HealingBonus;
                 #endregion
 
                 #region Exodus Items
@@ -642,7 +621,7 @@ namespace Server.Items
 			return BeginHeal(healer, patient, false);
 		}
 
-        public static BandageContext BeginHeal(Mobile healer, Mobile patient, bool enhanced) // TODO: Implement Pub 71 healing changes
+        public static BandageContext BeginHeal(Mobile healer, Mobile patient, bool enhanced)
         {
             bool isDeadPet = (patient is BaseCreature && ((BaseCreature)patient).IsDeadPet);
 
@@ -654,7 +633,7 @@ namespace Server.Items
             {
                 healer.SendLocalizedMessage(500951); // You cannot heal that.
             }
-            else if (!patient.Poisoned && patient.Hits == patient.HitsMax && !BleedAttack.IsBleeding(patient) && !SplinteringWeaponContext.IsBleeding(patient) && !isDeadPet)
+            else if (!patient.Poisoned && patient.Hits == patient.HitsMax && !BleedAttack.IsBleeding(patient) && !isDeadPet)
             {
                 healer.SendLocalizedMessage(500955); // That being is not damaged!
             }

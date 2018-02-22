@@ -292,7 +292,7 @@ namespace Server.Mobiles
 
             if (to.Alive && to.Player && m_Table[to] == null)
             {
-                to.Send(SpeedControl.WalkSpeed);
+                to.SendSpeedControl(SpeedControlType.WalkSpeed);
                 to.SendLocalizedMessage(1072069); // A cacophonic sound lambastes you, suppressing your ability to move.
                 to.PlaySound(0x584);
 
@@ -307,7 +307,7 @@ namespace Server.Mobiles
 
             m_Table[from] = null;
 
-            from.Send(SpeedControl.Disable);
+            from.SendSpeedControl(SpeedControlType.Disable);
         }
 
         public virtual void DropOoze()
@@ -461,8 +461,9 @@ namespace Server.Mobiles
         private void OnTick()
         {
             List<Mobile> toDamage = new List<Mobile>();
+            IPooledEnumerable eable = GetMobilesInRange(0);
 
-            foreach (Mobile m in this.GetMobilesInRange(0))
+            foreach (Mobile m in eable)
             {
                 if (m is BaseCreature)
                 {
@@ -479,6 +480,8 @@ namespace Server.Mobiles
                 if (m.Alive && !m.IsDeadBondedPet && m.CanBeDamaged())
                     toDamage.Add(m);
             }
+
+            eable.Free();
 
             for (int i = 0; i < toDamage.Count; ++i)
                 this.Damage(toDamage[i]);

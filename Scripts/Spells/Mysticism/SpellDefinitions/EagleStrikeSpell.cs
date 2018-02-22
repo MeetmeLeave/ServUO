@@ -42,6 +42,8 @@ namespace Server.Spells.Mysticism
 			}
 			else if ( CheckHSequence( target ) )
 			{
+                SpellHelper.CheckReflect((int)Circle, Caster, ref target);
+
 				Caster.MovingEffect( target, 0x407A, 8, 1, false, true, 0, 0 );
                 Caster.PlaySound(0x2EE); 
 
@@ -50,7 +52,7 @@ namespace Server.Spells.Mysticism
                     Caster.PlaySound(0x64D);
                 });
 
-				SpellHelper.Damage( this, target, (int)GetNewAosDamage( 19, 1, 5, target ), 0, 0, 0, 0, 100 );
+                SpellHelper.Damage(this, target, (int)GetNewAosDamage(19, 1, 5, target), 0, 0, 0, 0, 100);
 			}
 
 			FinishSequence();

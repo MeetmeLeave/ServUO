@@ -301,9 +301,9 @@ namespace Server.Items
                 new PMEntry(new Point3D(270, 628, 15), 1063414)// Homare-Jima
             });
         public static readonly PMList TerMur =
-            new PMList(1113602, 1113602, Map.TerMur, new PMEntry[]
+            new PMList(1113602, 1113604, Map.TerMur, new PMEntry[]
             {
-                new PMEntry(new Point3D(852, 3526, -43), 1113603), // Royal City
+                new PMEntry(new Point3D(850, 3525, -38), 1113603), // Royal City
                 Core.TOL ? new PMEntry(new Point3D(719, 1863, 40), 1156262) : new PMEntry(new Point3D(926, 3989, -36), 1112572), // Valley of Eodon
                 // Holy City
             });
@@ -368,6 +368,7 @@ namespace Server.Items
         private readonly Mobile m_Mobile;
         private readonly Item m_Moongate;
         private readonly PMList[] m_Lists;
+
         public MoongateGump(Mobile mobile, Item moongate)
             : base(100, 100)
         {
@@ -582,6 +583,9 @@ namespace Server.Items
         private void RenderPage(int index, int offset)
         {
             PMList list = m_Lists[index];
+
+            if (Siege.SiegeShard && list.Number == 1012000) // Trammel
+                return;
 
             AddPage(index + 1);
 

@@ -64,6 +64,13 @@ namespace Server
 			return newPoison ?? oldPoison;
 		}
 
+        public static Poison DecreaseLevel(Poison oldPoison)
+        {
+            Poison newPoison = (oldPoison == null ? null : GetPoison(oldPoison.Level - 1));
+
+            return (newPoison == null ? oldPoison : newPoison);
+        }
+
 		// Info
 		private readonly string m_Name;
 		private readonly int m_Level;
@@ -164,7 +171,11 @@ namespace Server
 				m_From = m;
 				m_Mobile = m;
 				m_Poison = p;
-			}
+
+                int damage = 1 + (int)(m.Hits * p.m_Scalar);
+
+                BuffInfo.AddBuff(m, new BuffInfo(BuffIcon.Poison, 1017383, 1075633, TimeSpan.FromSeconds((int)((p.m_Count + 1) * p.m_Interval.TotalSeconds)), m, String.Format("{0}\t{1}", damage, (int)p.m_Interval.TotalSeconds)));
+            }
 
             protected override void OnTick()
             {

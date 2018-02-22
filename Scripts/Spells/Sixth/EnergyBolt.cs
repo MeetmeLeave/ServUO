@@ -64,7 +64,7 @@ namespace Server.Spells.Sixth
 
                 if (Core.AOS)
                 {
-                    damage = this.GetNewAosDamage(40, 1, 5, m);
+                    damage = GetNewAosDamage(40, 1, 5, m);
                 }
                 else if (mob != null)
                 {

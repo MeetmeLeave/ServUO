@@ -37,9 +37,6 @@ namespace Server.Commands
 			Generate("deco", "Data/Decoration/Malas", Map.Malas);
 			Generate("deco", "Data/Decoration/Tokuno", Map.Tokuno);
 
-            // The problem is, this needs to have vendors present so the fillable knows what type to assign
-            Timer.DelayCall(TimeSpan.FromMinutes(30), () => { FillableContainer.CheckFillables_OnCommand(e); });
-
             m_Mobile.SendMessage("World generating complete. {0} items were generated.", m_Count);
         }
 
@@ -571,7 +568,7 @@ namespace Server.Commands
                         int indexOf = this.m_Params[i].IndexOf('=');
 
                         if (indexOf >= 0)
-                            sp.SpawnNames.Add(this.m_Params[i].Substring(++indexOf));
+                            sp.SpawnObjects.Add(new Server.Mobiles.SpawnObject(this.m_Params[i].Substring(++indexOf)));
                     }
                     else if (this.m_Params[i].StartsWith("MinDelay"))
                     {
@@ -599,7 +596,7 @@ namespace Server.Commands
                         int indexOf = this.m_Params[i].IndexOf('=');
 
                         if (indexOf >= 0)
-                            sp.Count = Utility.ToInt32(this.m_Params[i].Substring(++indexOf));
+                            sp.MaxCount = Utility.ToInt32(this.m_Params[i].Substring(++indexOf));
                     }
                     else if (this.m_Params[i].StartsWith("Team"))
                     {
