@@ -49,6 +49,7 @@ namespace Server.Mobiles
         AI_Spellweaving,
         AI_Mystic,
         AI_Paladin,
+        AI_Necro,
 	}
 
 	public enum ActionType
@@ -63,6 +64,8 @@ namespace Server.Mobiles
 
 	public abstract class BaseAI
 	{
+        public const double FollowSpeed = 0.2;
+
 		public Timer m_Timer;
 		protected ActionType m_Action;
 		private long m_NextStopGuard;
@@ -923,9 +926,8 @@ namespace Server.Mobiles
 					m_Mobile.Warmode = true;
 					m_Mobile.FocusMob = null;
 					m_Mobile.Combatant = null;
-					m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
 					m_NextStopGuard = Core.TickCount + 10000;
-					m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                    m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
 					break;
 				case ActionType.Flee:
 					m_Mobile.Warmode = true;
@@ -1220,7 +1222,7 @@ namespace Server.Mobiles
 					break;
 				case OrderType.Come:
 					m_Mobile.ControlMaster.RevealingAction();
-					m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                    m_Mobile.CurrentSpeed = FollowSpeed;
 					m_Mobile.PlaySound(m_Mobile.GetIdleSound());
 					m_Mobile.Warmode = false;
 					m_Mobile.Combatant = null;
@@ -1238,7 +1240,7 @@ namespace Server.Mobiles
 					break;
 				case OrderType.Guard:
 					m_Mobile.ControlMaster.RevealingAction();
-					m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                    m_Mobile.CurrentSpeed = FollowSpeed;
 					m_Mobile.PlaySound(m_Mobile.GetIdleSound());
 					m_Mobile.Warmode = true;
 					m_Mobile.Combatant = null;
@@ -1285,7 +1287,7 @@ namespace Server.Mobiles
 					break;
 				case OrderType.Follow:
 					m_Mobile.ControlMaster.RevealingAction();
-					m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                    m_Mobile.CurrentSpeed = FollowSpeed;
 					m_Mobile.PlaySound(m_Mobile.GetIdleSound());
 
 					m_Mobile.Warmode = false;
@@ -1435,7 +1437,7 @@ namespace Server.Mobiles
 			{
 				int iCurrDist = (int)m_Mobile.GetDistanceToSqrt(m_Mobile.ControlTarget);
 
-				if (iCurrDist > m_Mobile.RangePerception)
+				if (iCurrDist > m_Mobile.RangePerception * 5)
 				{
 					m_Mobile.DebugSay("I have lost the one to follow. I stay here");
 
@@ -1470,7 +1472,7 @@ namespace Server.Mobiles
 							m_Mobile.Warmode = false;
 							if (Core.AOS)
 							{
-                                m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                                m_Mobile.CurrentSpeed = FollowSpeed;
 							}
 						}
 					}
@@ -1652,7 +1654,7 @@ namespace Server.Mobiles
 				m_Mobile.Warmode = false;
 				if (Core.AOS)
 				{
-                    m_Mobile.CurrentSpeed = m_Mobile.ActiveSpeed;
+                    m_Mobile.CurrentSpeed = FollowSpeed;
 				}
 
 				WalkMobileRange(controlMaster, 1, false, 0, 1);
@@ -1747,7 +1749,12 @@ namespace Server.Mobiles
 			m_Mobile.PlaySound(m_Mobile.GetAngerSound());
             Mobile master = m_Mobile.ControlMaster;
 
-			m_Mobile.SetControlMaster(null);
+            if (m_Mobile.DeleteOnRelease)
+            {
+                m_Mobile.PrivateOverheadMessage(MessageType.Regular, 0x3B2, 1043255, String.Format("{0}", m_Mobile.Name), master.NetState); // ~1_NAME~ appears to have decided that it is better off without a master!
+            }
+
+            m_Mobile.SetControlMaster(null);
 			m_Mobile.SummonMaster = null;
 
 			m_Mobile.BondingBegin = DateTime.MinValue;
@@ -1763,7 +1770,7 @@ namespace Server.Mobiles
 
 			if (m_Mobile.DeleteOnRelease || m_Mobile.IsDeadPet)
 			{
-				m_Mobile.Delete();
+                Timer.DelayCall(TimeSpan.FromSeconds(2), m_Mobile.Delete);
 			}
 
 			m_Mobile.BeginDeleteTimer();
@@ -2621,6 +2628,16 @@ namespace Server.Mobiles
 			{
 				return false;
 			}
+
+            if (!m_Mobile.Controlled && m_Mobile.ForceStayHome)
+            {
+                int rangeHome = Math.Min(10, m_Mobile.RangeHome);
+
+                if (!Utility.InRange(new Point3D(p), m_Mobile.Home, rangeHome) || 0.025 < Utility.RandomDouble())
+                {
+                    return false;
+                }
+            }
 
 			if (m_Mobile.InRange(p, range))
 			{

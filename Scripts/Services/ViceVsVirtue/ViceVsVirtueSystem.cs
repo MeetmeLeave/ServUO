@@ -133,7 +133,8 @@ namespace Server.Engines.VvV
             Guild g = pm.Guild as Guild;
             VvVPlayerEntry entry = GetEntry(pm, true) as VvVPlayerEntry;
 
-            entry.Active = true;
+            if (!entry.Active)
+                entry.Active = true;
 
             pm.SendLocalizedMessage(1155564); // You have joined Vice vs Virtue!
             pm.SendLocalizedMessage(1063156, g.Name); // The guild information for ~1_val~ has been updated.
@@ -468,44 +469,21 @@ namespace Server.Engines.VvV
             if (to is BaseCreature && ((BaseCreature)to).GetMaster() is PlayerMobile)
                 to = ((BaseCreature)to).GetMaster();
 
-            if (from == to || IsVvVCombatant(to) || IsVvVCombatant(from))
+            if (from == to || !IsVvVCombatant(to) || !IsVvVCombatant(from))
                 return false;
 
             VvVPlayerEntry fromentry = Instance.GetPlayerEntry<VvVPlayerEntry>(from);
             VvVPlayerEntry toentry = Instance.GetPlayerEntry<VvVPlayerEntry>(to);
 
-            Guild fromguild = from.Guild as Guild;
-            Guild toguild = to.Guild as Guild;
+            Guild fromGuild = from.Guild as Guild;
+            Guild toGuild = to.Guild as Guild;
 
-            if (fromentry == null || toentry == null || !fromentry.Active || !toentry.Active)
+            if (fromGuild != null && toGuild != null && (fromGuild == toGuild || fromGuild.IsAlly(toGuild)))
             {
-                if (TempParticipants != null)
-                {
-                    CheckTempParticipants();
-
-                    if ((fromentry != null && toentry == null || (fromentry == null && toentry != null)) &&
-                        (TempParticipants.ContainsKey(from) || TempParticipants.ContainsKey(to)) &&
-                        ((fromguild == null && toguild == null) || fromguild != toguild)) // one is vvv and the other isnt, seperate guilds
-                    {
-                        return true;
-                    }
-
-                    if (fromentry == null && toentry == null &&
-                        ((fromguild == null && toguild == null) || fromguild != toguild) &&
-                        TempParticipants.ContainsKey(from) &&
-                        TempParticipants.ContainsKey(to)) // neither are vvv, seperate guilds
-                    {
-                        return true;
-                    }
-                }
-
                 return false;
             }
 
-            if (toguild == null || fromguild == null)
-                return true;
-
-            return fromguild != toguild && !fromguild.IsAlly(toguild);
+            return true;
         }
 
         public static void AddTempParticipant(Mobile m)
@@ -527,7 +505,7 @@ namespace Server.Engines.VvV
             if (attacker == null || defender == null)
                 return;
 
-            if (!IsVvV(attacker) && IsVvV(defender))
+            if (!IsVvV(attacker) && IsVvV(defender) && !defender.Aggressed.Any(info => info.Defender == attacker))
             {
                 Guild attackerguild = attacker.Guild as Guild;
                 Guild defenderguild = defender.Guild as Guild;
@@ -796,7 +774,7 @@ namespace Server.Engines.VvV
             {
                 if (!_Active && value)
                 {
-                    Points = ViceVsVirtueSystem.StartSilver;
+                    Points = 0;
                 }
 
                 _Active = value;
@@ -809,7 +787,8 @@ namespace Server.Engines.VvV
         public VvVPlayerEntry(PlayerMobile pm)
             : base(pm)
         {
-            Active = true;
+            _Active = true;
+            Points = ViceVsVirtueSystem.StartSilver;
         }
 
         public override void Serialize(GenericWriter writer)

@@ -1,4 +1,4 @@
-﻿//#define TRACE
+//#define TRACE
 //#define RESTRICTCONSTRUCTABLE
 
 using System;
@@ -4735,7 +4735,8 @@ public static void _TraceEnd(int index)
 			catch
 			{
 				if (from != null)
-					from.SendMessage(33, "Error reading xml file {0}", filename); fileerror = true;
+					from.SendMessage(33, "Error reading xml file {0}", filename);
+                fileerror = true;
 			}
 			// close the file
 			fs.Close();
@@ -11203,6 +11204,14 @@ public static void _TraceEnd(int index)
 					Start();
 			}
 		}
+
+        public void RemoveSpawnObject(SpawnObject so)
+        {
+            if (m_SpawnObjects.Contains(so))
+            {
+                m_SpawnObjects.Remove(so);
+            }
+        }
 
 		#endregion
 

@@ -19,8 +19,11 @@ namespace Server
         [Flags]
         public enum SpawnerVersion
         {
-            None = 0x00000000,
-            Initial = 0x00000001,
+            None            = 0x00000000,
+            Initial         = 0x00000001,
+            Sphinx          = 0x00000002,
+            IceHoundRemoval = 0x00000004,
+            PaladinAndKrakin= 0x00000008,
         }
 
         public static string FilePath = Path.Combine("Saves/Misc", "SpawnerPresistence.bin");
@@ -92,7 +95,7 @@ namespace Server
                 FilePath,
                 writer =>
                 {
-                    writer.Write((int)11);
+                    writer.Write((int)12);
 
                     writer.Write((int)VersionFlag);
 
@@ -121,12 +124,33 @@ namespace Server
         }
 
         /// <summary>
-        /// Checks version, and calls code appropriately.  Version 10 implements SpawnerFlag so servers don't miss out and skip versions
+        /// Checks version, and calls code appropriately.  Version 10 implements SpawnerFlag so servers don't miss out and skip versions.
+        /// After this point, there is no need to increase version anymore unless any changes 
         /// </summary>
         public static void CheckVersion()
         {
             switch (_Version)
             {
+                case 12:
+                case 11:
+                    if ((VersionFlag & SpawnerVersion.PaladinAndKrakin) == 0)
+                    {
+                        RemovePaladinsAndKrakens();
+                        VersionFlag |= SpawnerVersion.PaladinAndKrakin;
+                    }
+
+                    if ((VersionFlag & SpawnerVersion.IceHoundRemoval) == 0)
+                    {
+                        RemoveIceHounds();
+                        VersionFlag |= SpawnerVersion.IceHoundRemoval;
+                    }
+
+                    if ((VersionFlag & SpawnerVersion.Sphinx) == 0)
+                    {
+                        AddSphinx();
+                        VersionFlag |= SpawnerVersion.Sphinx;
+                    }
+                    goto case 10;
                 case 10:
                     if((VersionFlag & SpawnerVersion.Initial) == 0)
                         VersionFlag |= SpawnerVersion.Initial;
@@ -173,6 +197,31 @@ namespace Server
             Console.WriteLine("[Spawner Persistence v{0}] {1}", _Version.ToString(), str);
             Utility.PopColor();
         }
+
+        #region Remove Paladins And Krakens
+        public static void RemovePaladinsAndKrakens()
+        {
+            Remove("HirePaladin");
+            Remove("Kraken", sp => !Region.Find(sp.Location, sp.Map).IsPartOf("Shame"));
+            ToConsole("Paladins and Krakens removed from spawners.");
+        }
+        #endregion
+
+        #region Remove Ice Hounds
+        public static void RemoveIceHounds()
+        {
+            Remove("icehound");
+            ToConsole("Ice Hounds removed from spawners.");
+        }
+        #endregion
+
+        #region Version 11
+        public static void AddSphinx()
+        {
+            Server.Engines.GenerateForgottenPyramid.Generate(null);
+            ToConsole("Generated Fortune Sphinx.");
+        }
+        #endregion
 
         #region Version 9
         public static void ReplaceUnderworldVersion9()
@@ -525,26 +574,30 @@ namespace Server
         /// Removes a SpawnerObject string, either the string or entire line
         /// </summary>
         /// <param name="toRemove">string to remove from line</param>
-        public static void Remove(string toRemove)
+        public static void Remove(string toRemove, Func<XmlSpawner, bool> predicate = null)
         {
             int count = 0;
+            int deleted = 0;
 
-            foreach (var spawner in World.Items.Values.OfType<XmlSpawner>())
+            var list = new List<XmlSpawner>(World.Items.Values.OfType<XmlSpawner>());
+
+            foreach (var spawner in list)
             {
-                count += Remove(spawner, toRemove);
+                if (predicate == null || predicate(spawner))
+                {
+                    count += Remove(spawner, toRemove, ref deleted);
+                }
             }
 
-            ToConsole(String.Format("Spawn Removal: {0} spawn lines removed containing -{1}-.", count.ToString(), toRemove));
+            ColUtility.Free(list);
+            ToConsole(String.Format("Spawn Removal: {0} spawn lines removed containing -{1}-. [{2} deleted].", count.ToString(), toRemove, deleted));
         }
 
-        public static int Remove(XmlSpawner spawner, string toRemove)
+        public static int Remove(XmlSpawner spawner, string toRemove, ref int deleted)
         {
-            int count = 0;
-
             List<XmlSpawner.SpawnObject> remove = new List<XmlSpawner.SpawnObject>();
-            List<XmlSpawner.SpawnObject> objects = spawner.SpawnObjects.ToList();
 
-            foreach (var obj in objects)
+            foreach (var obj in spawner.SpawnObjects)
             {
                 if (obj == null || obj.TypeName == null)
                     continue;
@@ -558,16 +611,20 @@ namespace Server
                 }
             }
 
-            count = remove.Count;
+            int count = remove.Count;
 
             foreach (var obj in remove)
-                objects.Remove(obj);
+            {
+                spawner.RemoveSpawnObject(obj);
 
-            if (count > 0)
-                spawner.SpawnObjects = objects.ToArray();
+                foreach (var e in obj.SpawnedObjects.OfType<IEntity>())
+                {
+                    e.Delete();
+                    deleted++;
+                }
+            }
 
             ColUtility.Free(remove);
-
             return count;
         }
 

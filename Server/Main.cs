@@ -38,6 +38,8 @@ namespace Server
             GlobalRadarRange = 37;
 		}
 
+		public static bool Crashed { get { return _Crashed; } }
+
 		private static bool _Crashed;
 		private static Thread _TimerThread;
 		private static string _BaseDirectory;
@@ -147,7 +149,7 @@ namespace Server
 		public static int ProcessorCount { get; private set; }
 
 		public static bool Unix { get; private set; }
-
+		
 		public static string FindDataFile(string path)
 		{
 			if (DataDirectories.Count == 0)
@@ -190,6 +192,7 @@ namespace Server
 		public static bool SA { get { return Expansion >= Expansion.SA; } }
 		public static bool HS { get { return Expansion >= Expansion.HS; } }
 		public static bool TOL { get { return Expansion >= Expansion.TOL; } }
+		public static bool EJ { get { return Expansion >= Expansion.EJ; } }
 		#endregion
 
 		public static string ExePath { get { return _ExePath ?? (_ExePath = Assembly.Location); } }
@@ -457,34 +460,27 @@ namespace Server
 				Name = "Timer Thread"
 			};
 
-			Version ver = Assembly.GetName().Version;
+			Version  ver 		= Assembly.GetName().Version;
+			DateTime buildDate 	= new DateTime(2000, 1, 1).AddDays(ver.Build).AddSeconds(ver.Revision * 2);
+			
 
-			// Added to help future code support on forums, as a 'check' people can ask for to it see if they recompiled core or not
-			Utility.PushColor(ConsoleColor.DarkGreen);
-            if(!NoConsole)
-            {
-                Console.WriteLine(new String('-', Console.BufferWidth));
-            }
-            else
-            {
-                Console.WriteLine(new String('-', 10));
-            }
-			Utility.PopColor();
 			Utility.PushColor(ConsoleColor.Cyan);
         #if DEBUG
             Console.WriteLine(
-                "ServUO - [https://www.servuo.com] Version {0}.{1}, Build {2}.{3} - Debug",
+                "ServUO - [https://www.servuo.com] Version {0}.{1}, Build {2}.{3} - Build on {4} UTC - Debug",
                 ver.Major,
                 ver.Minor,
                 ver.Build,
-                ver.Revision);
+                ver.Revision,
+				buildDate);
         #else
             Console.WriteLine(
-				"ServUO - [https://www.servuo.com] Version {0}.{1}, Build {2}.{3} - Release",
+				"ServUO - [https://www.servuo.com] Version {0}.{1}, Build {2}.{3} - Build on {4} UTC - Release",
 				ver.Major,
 				ver.Minor,
 				ver.Build,
-				ver.Revision);
+				ver.Revision,
+				buildDate);
         #endif
 			Utility.PopColor();
 
@@ -514,13 +510,29 @@ namespace Server
 					Is64Bit ? "64-bit " : "");
 				Utility.PopColor();
 			}
+			
+			string dotnet = null;
 
-            string dotnet = null;
-
-            #if NETFX_20
-                        dotnet = "2.0";
-            #endif
-
+			if (Type.GetType("Mono.Runtime") != null)
+			{	
+				MethodInfo displayName = Type.GetType("Mono.Runtime").GetMethod("GetDisplayName", BindingFlags.NonPublic | BindingFlags.Static);
+				if (displayName != null)
+				{
+					dotnet = displayName.Invoke(null, null).ToString();
+					
+					Utility.PushColor(ConsoleColor.Yellow);
+					Console.WriteLine("Core: Unix environment detected");
+					Utility.PopColor();
+					
+					Unix = true;
+				}
+			}
+			else
+			{
+				m_ConsoleEventHandler = OnConsoleEvent;
+				UnsafeNativeMethods.SetConsoleCtrlHandler(m_ConsoleEventHandler, true);
+			}
+            
             #if NETFX_30
                         dotnet = "3.0";
             #endif
@@ -565,24 +577,8 @@ namespace Server
                 dotnet = "MONO/CSC/Unknown";
             
             Utility.PushColor(ConsoleColor.Green);
-            Console.WriteLine("Core: Compiled for .NET {0}", dotnet);
+            Console.WriteLine("Core: Compiled for " + ( Unix ? "MONO and running on {0}" : ".NET {0}" ), dotnet);
             Utility.PopColor();
-
-            int platform = (int)Environment.OSVersion.Platform;
-
-			if (platform == 4 || platform == 128)
-			{
-				// MS 4, MONO 128
-				Unix = true;
-				Utility.PushColor(ConsoleColor.Yellow);
-				Console.WriteLine("Core: Unix environment detected");
-				Utility.PopColor();
-			}
-			else
-			{
-				m_ConsoleEventHandler = OnConsoleEvent;
-				UnsafeNativeMethods.SetConsoleCtrlHandler(m_ConsoleEventHandler, true);
-			}
 
 			if (GCSettings.IsServerGC)
 			{

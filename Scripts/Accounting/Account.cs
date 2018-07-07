@@ -32,7 +32,8 @@ namespace Server.Accounting
 
 		private static MD5CryptoServiceProvider m_MD5HashProvider;
 		private static SHA1CryptoServiceProvider m_SHA1HashProvider;
-		private static byte[] m_HashBuffer;
+        private static SHA512CryptoServiceProvider m_SHA512HashProvider;
+        private static byte[] m_HashBuffer;
 
 		public static void Configure()
 		{
@@ -197,10 +198,11 @@ namespace Server.Accounting
 			Username = Utility.GetText(node["username"], "empty");
 
 			var plainPassword = Utility.GetText(node["password"], null);
-			var cryptPassword = Utility.GetText(node["cryptPassword"], null);
-			var newCryptPassword = Utility.GetText(node["newCryptPassword"], null);
+			var MD5Password = Utility.GetText(node["cryptPassword"], null);
+			var SHA1Password = Utility.GetText(node["newCryptPassword"], null);
+            var SHA512Password = Utility.GetText(node["newSecureCryptPassword"], null);
 
-			switch (AccountHandler.ProtectPasswords)
+            switch (AccountHandler.ProtectPasswords)
 			{
 				case PasswordProtection.None:
 				{
@@ -208,13 +210,17 @@ namespace Server.Accounting
 					{
 						SetPassword(plainPassword);
 					}
-					else if (newCryptPassword != null)
+					else if (SHA512Password != null)
 					{
-						NewCryptPassword = newCryptPassword;
+						_SHA512Password = SHA512Password;
 					}
-					else if (cryptPassword != null)
+                    else if (SHA1Password != null)
+                    {
+                        _SHA1Password = SHA1Password;
+                    }
+                    else if (MD5Password != null)
 					{
-						CryptPassword = cryptPassword;
+						_MD5Password = MD5Password;
 					}
 					else
 					{
@@ -225,38 +231,71 @@ namespace Server.Accounting
 				}
 				case PasswordProtection.Crypt:
 				{
-					if (cryptPassword != null)
+					if (MD5Password != null)
 					{
-						CryptPassword = cryptPassword;
+						_MD5Password = MD5Password;
 					}
 					else if (plainPassword != null)
 					{
 						SetPassword(plainPassword);
 					}
-					else if (newCryptPassword != null)
+					else if (SHA1Password != null)
 					{
-						NewCryptPassword = newCryptPassword;
+						_SHA1Password = SHA1Password;
 					}
-					else
+                    else if (SHA512Password != null)
+                    {
+                        _SHA512Password = SHA512Password;
+                    }
+                    else
 					{
 						SetPassword("empty");
 					}
 
 					break;
 				}
-				default: // PasswordProtection.NewCrypt
-				{
-					if (newCryptPassword != null)
-					{
-						NewCryptPassword = newCryptPassword;
-					}
+                case PasswordProtection.NewCrypt:
+                {
+                    if (SHA1Password != null)
+                    {
+                    _SHA1Password = SHA1Password;
+                    }
+                    else if (plainPassword != null)
+                    {
+                        SetPassword(plainPassword);
+                    }
+                    else if (MD5Password != null)
+                    {
+                        _MD5Password = MD5Password;
+                    }
+                    else if (SHA512Password != null)
+                    {
+                        _SHA512Password = SHA512Password;
+                    }
+                    else
+                    {
+                        SetPassword("empty");
+                    }
+
+                    break;
+                }
+                default: // PasswordProtection.NewSecureCrypt
+                {
+                    if (SHA512Password != null)
+                    {
+                        _SHA512Password = SHA512Password;
+                    }
 					else if (plainPassword != null)
 					{
 						SetPassword(plainPassword);
 					}
-					else if (cryptPassword != null)
+                    else if (SHA1Password != null)
 					{
-						CryptPassword = cryptPassword;
+						_SHA1Password = SHA1Password;
+					}
+					else if (MD5Password != null)
+					{
+						_MD5Password = MD5Password;
 					}
 					else
 					{
@@ -274,6 +313,7 @@ namespace Server.Accounting
 			LastLogin = Utility.GetXMLDateTime(Utility.GetText(node["lastLogin"], null), DateTime.UtcNow);
 
 			TotalCurrency = Utility.GetXMLDouble(Utility.GetText(node["totalCurrency"], "0"), 0);
+            Sovereigns = Utility.GetXMLInt32(Utility.GetText(node["sovereigns"], "0"), 0);
 
 			m_Mobiles = LoadMobiles(node);
 			m_Comments = LoadComments(node);
@@ -382,18 +422,23 @@ namespace Server.Accounting
 		/// <summary>
 		///     Account password. Hashed with MD5. May be null.
 		/// </summary>
-		public string CryptPassword { get; set; }
+		public string _MD5Password { get; set; }
 
 		/// <summary>
 		///     Account username and password hashed with SHA1. May be null.
 		/// </summary>
-		public string NewCryptPassword { get; set; }
+		public string _SHA1Password { get; set; }
 
-		/// <summary>
-		///     Internal bitfield of account flags. Consider using direct access properties (Banned, Young), or GetFlag/SetFlag
-		///     methods
-		/// </summary>
-		public int Flags { get; set; }
+        /// <summary>
+        ///     Account username and password hashed with SHA512. May be null.
+        /// </summary>
+        public string _SHA512Password { get; set; }
+
+        /// <summary>
+        ///     Internal bitfield of account flags. Consider using direct access properties (Banned, Young), or GetFlag/SetFlag
+        ///     methods
+        /// </summary>
+        public int Flags { get; set; }
 
 		/// <summary>
 		///     Gets or sets a flag indiciating if this account is banned.
@@ -637,22 +682,33 @@ namespace Server.Accounting
 				case PasswordProtection.None:
 				{
 					PlainPassword = plainPassword;
-					CryptPassword = null;
-					NewCryptPassword = null;
+					_MD5Password = null;
+					_SHA1Password = null;
+					_SHA512Password = null;
 				}
 					break;
 				case PasswordProtection.Crypt:
 				{
 					PlainPassword = null;
-					CryptPassword = HashMD5(plainPassword);
-					NewCryptPassword = null;
+					_MD5Password = HashMD5(plainPassword);
+					_SHA1Password = null;
+					_SHA512Password = null;
 				}
 					break;
-				default: // PasswordProtection.NewCrypt
+                case PasswordProtection.NewCrypt:
+                {
+                    PlainPassword = null;
+                    _MD5Password = null;
+                    _SHA1Password = HashSHA1(Username + plainPassword);
+					_SHA512Password = null;
+                }
+                    break;
+                default: // PasswordProtection.NewSecureCrypt
 				{
 					PlainPassword = null;
-					CryptPassword = null;
-					NewCryptPassword = HashSHA1(Username + plainPassword);
+					_MD5Password = null;
+					_SHA1Password = null;
+                    _SHA512Password = HashSHA512(Username + plainPassword); 
 				}
 					break;
 			}
@@ -668,18 +724,23 @@ namespace Server.Accounting
 				ok = (PlainPassword == plainPassword);
 				curProt = PasswordProtection.None;
 			}
-			else if (CryptPassword != null)
+			else if (_MD5Password != null)
 			{
-				ok = (CryptPassword == HashMD5(plainPassword));
+				ok = (_MD5Password == HashMD5(plainPassword));
 				curProt = PasswordProtection.Crypt;
 			}
-			else
-			{
-				ok = (NewCryptPassword == HashSHA1(Username + plainPassword));
+			else if (_SHA1Password != null)
+            {
+				ok = (_SHA1Password == HashSHA1(Username + plainPassword));
 				curProt = PasswordProtection.NewCrypt;
 			}
+            else
+            {
+                ok = (_SHA512Password == HashSHA512(Username + plainPassword));
+                curProt = PasswordProtection.NewSecureCrypt;
+            }
 
-			if (ok && curProt != AccountHandler.ProtectPasswords)
+            if (ok && curProt != AccountHandler.ProtectPasswords)
 			{
 				SetPassword(plainPassword);
 			}
@@ -752,8 +813,25 @@ namespace Server.Accounting
 
 			return BitConverter.ToString(hashed);
 		}
+        public static string HashSHA512(string phrase)
+        {
+            if (m_SHA512HashProvider == null)
+            {
+                m_SHA512HashProvider = new SHA512CryptoServiceProvider();
+            }
 
-		public static void Initialize()
+            if (m_HashBuffer == null)
+            {
+                m_HashBuffer = new byte[256];
+            }
+
+            var length = Encoding.ASCII.GetBytes(phrase, 0, phrase.Length > 256 ? 256 : phrase.Length, m_HashBuffer, 0);
+            var hashed = m_SHA512HashProvider.ComputeHash(m_HashBuffer, 0, length);
+
+            return BitConverter.ToString(hashed);
+        }
+
+        public static void Initialize()
 		{
 			EventSink.Connected += EventSink_Connected;
 			EventSink.Disconnected += EventSink_Disconnected;
@@ -1255,21 +1333,28 @@ namespace Server.Accounting
 				xml.WriteEndElement();
 			}
 
-			if (CryptPassword != null)
+			if (_MD5Password != null)
 			{
 				xml.WriteStartElement("cryptPassword");
-				xml.WriteString(CryptPassword);
+				xml.WriteString(_MD5Password);
 				xml.WriteEndElement();
 			}
 
-			if (NewCryptPassword != null)
+			if (_SHA1Password != null)
 			{
 				xml.WriteStartElement("newCryptPassword");
-				xml.WriteString(NewCryptPassword);
+				xml.WriteString(_SHA1Password);
 				xml.WriteEndElement();
 			}
 
-			if (m_AccessLevel >= AccessLevel.Counselor)
+            if (_SHA512Password != null)
+            {
+                xml.WriteStartElement("newSecureCryptPassword");
+                xml.WriteString(_SHA512Password);
+                xml.WriteEndElement();
+            }
+
+            if (m_AccessLevel >= AccessLevel.Counselor)
 			{
 				xml.WriteStartElement("accessLevel");
 				xml.WriteString(m_AccessLevel.ToString());
@@ -1369,6 +1454,10 @@ namespace Server.Accounting
 			xml.WriteStartElement("totalCurrency");
 			xml.WriteString(XmlConvert.ToString(TotalCurrency));
 			xml.WriteEndElement();
+
+            xml.WriteStartElement("sovereigns");
+            xml.WriteString(XmlConvert.ToString(Sovereigns));
+            xml.WriteEndElement();
 
             if (SecureAccounts != null)
             {
@@ -1797,6 +1886,46 @@ namespace Server.Accounting
             return false;
         }
         #endregion
-		#endregion
-	}
+        #endregion
+
+        #region Sovereigns
+        /// <summary>
+        ///     Sovereigns which can be used at the shard owners disposal. On EA, they are used for curerncy with the Ultima Store
+        /// </summary>
+        [CommandProperty(AccessLevel.Administrator, true)]
+        public int Sovereigns { get; private set; }
+
+        public void SetSovereigns(int amount)
+        {
+            Sovereigns = amount;
+        }
+
+        public bool DepositSovereigns(int amount)
+        {
+            if (amount <= 0)
+            {
+                return false;
+            }
+
+            Sovereigns += amount;
+            return true;
+        }
+
+        public bool WithdrawSovereigns(int amount)
+        {
+            if (amount <= 0)
+            {
+                return true;
+            }
+
+            if (amount > Sovereigns)
+            {
+                return false;
+            }
+
+            Sovereigns -= amount;
+            return true;
+        }
+        #endregion
+    }
 }

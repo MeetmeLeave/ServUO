@@ -46,6 +46,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Abilities\ColdWind.cs" />
     <Compile Include="Accounting\AccessRestrictions.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -690,6 +691,10 @@
     <Compile Include="Items\Artifacts\Equipment\Armor\Sets\Bestial\BestialLegs.cs" />
     <Compile Include="Items\Artifacts\Equipment\Armor\Sets\Luck\LuneRouge.cs" />
     <Compile Include="Items\Artifacts\Equipment\Armor\Sets\Luck\SoleilRouge.cs" />
+    <Compile Include="Items\Artifacts\Equipment\Clothing\CloakOfDeath.cs" />
+    <Compile Include="Items\Artifacts\Equipment\Clothing\CloakOfLife.cs" />
+    <Compile Include="Items\Artifacts\Equipment\Clothing\CloakOfPower.cs" />
+    <Compile Include="Items\Artifacts\Equipment\Clothing\CloakOfSilence.cs" />
     <Compile Include="Items\Artifacts\Equipment\Clothing\TheScholarsHalo.cs" />
     <Compile Include="Items\Artifacts\Equipment\Clothing\JadeArmband.cs" />
     <Compile Include="Items\Artifacts\Equipment\Clothing\MagicalDoor.cs" />
@@ -707,7 +712,9 @@
     <Compile Include="Items\Consumables\DeliciouslyTastyTreat.cs" />
     <Compile Include="Items\Consumables\IrresistiblyTastyTreat.cs" />
     <Compile Include="Items\Consumables\SkinTingeingTincture.cs" />
+    <Compile Include="Items\Consumables\SoulstonePromotionalTokens.cs" />
     <Compile Include="Items\Consumables\TastyTreat.cs" />
+    <Compile Include="Items\Containers\ShipsStrongbox.cs" />
     <Compile Include="Items\Decorative\AllegiancePouch.cs" />
     <Compile Include="Items\Decorative\Bridle.cs" />
     <Compile Include="Items\Decorative\DecorativeCarpet.cs" />
@@ -865,6 +872,7 @@
     <Compile Include="Items\Internal\BlightedGroveTeleporters.cs" />
     <Compile Include="Items\Internal\BlueNinjaQuestTeleporter.cs" />
     <Compile Include="Items\Internal\CrystalTeleporter.cs" />
+    <Compile Include="Items\Internal\EffectMobile.cs" />
     <Compile Include="Items\Internal\GreenNinjaQuestTeleporter.cs" />
     <Compile Include="Items\Internal\ItemInterfaces.cs" />
     <Compile Include="Items\Internal\MacawSpawner.cs" />
@@ -938,14 +946,41 @@
     <Compile Include="Items\Artifacts\Equipment\Armor\WardedDemonboneBracers.cs" />
     <Compile Include="Items\Artifacts\Equipment\Clothing\WardensArmorOfAugmentation.cs" />
     <Compile Include="Items\Resource\BloodOfTheDarkFather.cs" />
+    <Compile Include="Items\Resource\OilFlask.cs" />
     <Compile Include="Items\Resource\SmallFish.cs" />
     <Compile Include="Items\Resource\WorkableGlass.cs" />
+    <Compile Include="Items\StoreBought\AbyssalHairDye.cs" />
+    <Compile Include="Items\StoreBought\AncestralGravestone.cs" />
+    <Compile Include="Items\StoreBought\ArmorEngravingToolToken.cs" />
+    <Compile Include="Items\StoreBought\BulkOrderBookCover.cs" />
+    <Compile Include="Items\StoreBought\CharacterReincarnationToken.cs" />
+    <Compile Include="Items\StoreBought\CommemorativeRobe.cs" />
+    <Compile Include="Items\StoreBought\DecorativeBlackWidow.cs" />
+    <Compile Include="Items\StoreBought\FallenLog.cs" />
+    <Compile Include="Items\StoreBought\FreshGreenLadyBug.cs" />
+    <Compile Include="Items\StoreBought\GenderChangeToken.cs" />
+    <Compile Include="Items\StoreBought\GreenGoblinStatuette.cs" />
+    <Compile Include="Items\StoreBought\GreyGoblinStatuette.cs" />
+    <Compile Include="Items\StoreBought\HaochisPigments.cs" />
+    <Compile Include="Items\StoreBought\HildebrandtDragonRug.cs" />
+    <Compile Include="Items\StoreBought\HoodedBritanniaRobe.cs" />
+    <Compile Include="Items\StoreBought\LargeGlowingLadyBug.cs" />
+    <Compile Include="Items\StoreBought\MapleTree.cs" />
     <Compile Include="Items\StoreBought\MerchantsTrinket.cs" />
     <Compile Include="Items\StoreBought\MythicalCharacterToken.cs" />
+    <Compile Include="Items\StoreBought\NameChangeToken.cs" />
+    <Compile Include="Items\StoreBought\NaturalHairDyes.cs" />
     <Compile Include="Items\StoreBought\PetBrandingIron.cs" />
+    <Compile Include="Items\StoreBought\RaceChangeToken.cs" />
     <Compile Include="Items\StoreBought\SmugglersEdge.cs" />
+    <Compile Include="Items\StoreBought\SnowTree.cs" />
     <Compile Include="Items\StoreBought\StableSlotIncreaseToken.cs" />
     <Compile Include="Items\StoreBought\UndertakersStaff.cs" />
+    <Compile Include="Items\StoreBought\VirtueShield.cs" />
+    <Compile Include="Items\StoreBought\WillowTree.cs" />
+    <Compile Include="Items\StoreBought\WoodenBookcase.cs" />
+    <Compile Include="Items\StoreBought\WoodworkersBench.cs" />
+    <Compile Include="Items\StoreBought\WorldTreeRug.cs" />
     <Compile Include="Items\Tools\BaseHarvestTool.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1058,7 +1093,6 @@
     <Compile Include="Items\Tools\PetBondingPotion.cs" />
     <Compile Include="Items\Tools\RunicMalletAndChisel.cs" />
     <Compile Include="Misc\EquipLastWeapon.cs" />
-    <Compile Include="Misc\Extensions.cs" />
     <Compile Include="Items\Artifacts\Equipment\Glasses\Glasses.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1811,7 +1845,11 @@
     <Compile Include="Misc\UntamedPetsCleaning.cs" />
     <Compile Include="Misc\Waypoints.cs" />
     <Compile Include="Misc\WorldLocationInfo.cs" />
-    <Compile Include="Mobiles\AI\PaladinAI.cs" />
+    <Compile Include="Mobiles\AI\Magical AI\MageAI.cs" />
+    <Compile Include="Mobiles\AI\Magical AI\NecroAI.cs" />
+    <Compile Include="Mobiles\AI\Magical AI\NecromageAI.cs" />
+    <Compile Include="Mobiles\AI\Magical AI\PaladinAI.cs" />
+    <Compile Include="Mobiles\AI\Magical AI\SpellweavingAI.cs" />
     <Compile Include="Mobiles\Bosses\AbyssalInfernal.cs" />
     <Compile Include="Mobiles\Bosses\Barracoon.cs" />
     <Compile Include="Mobiles\Bosses\BaseChampion.cs" />
@@ -1829,6 +1867,7 @@
     <Compile Include="Mobiles\Bosses\Serado.cs" />
     <Compile Include="Mobiles\Bosses\ServantOfSemidar.cs" />
     <Compile Include="Mobiles\Bosses\Silvani.cs" />
+    <Compile Include="Mobiles\Event\BaneDragon.cs" />
     <Compile Include="Mobiles\Event\PumpkinHead.cs" />
     <Compile Include="Mobiles\Event\Wanderer.cs" />
     <Compile Include="Mobiles\Factions\BaseWarHorse.cs" />
@@ -1920,7 +1959,11 @@
     <Compile Include="Mobiles\Normal\BlackSolenWarrior.cs" />
     <Compile Include="Mobiles\Normal\BlackSolenWorker.cs" />
     <Compile Include="Mobiles\Normal\BloodElemental.cs" />
+    <Compile Include="Mobiles\Normal\Grubber.cs" />
+    <Compile Include="Mobiles\Normal\Lifestealer.cs" />
     <Compile Include="Mobiles\Normal\DragonWolf.cs" />
+    <Compile Include="Mobiles\Normal\DreadWarhorse.cs" />
+    <Compile Include="Mobiles\Normal\FrostDrake.cs" />
     <Compile Include="Mobiles\Normal\Lasher.cs" />
     <Compile Include="Mobiles\Normal\Windrunner.cs" />
     <Compile Include="Mobiles\Normal\StygianDrake.cs" />
@@ -2678,6 +2721,7 @@
     <Compile Include="Quests\DarkTides\Conversations.cs" />
     <Compile Include="Quests\DarkTides\DarkTidesQuest.cs" />
     <Compile Include="Quests\DarkTides\Objectives.cs" />
+    <Compile Include="Quests\DiscoveringAnimalTraining\DiscoveringAnimalTraining.cs" />
     <Compile Include="Quests\ElfHeritage.cs" />
     <Compile Include="Quests\EminosUndertaking\Conversations.cs" />
     <Compile Include="Quests\EminosUndertaking\EminosUndertakingQuest.cs" />
@@ -2850,7 +2894,6 @@
     <Compile Include="Quests\StudyOfTheSolenHive\Objectives.cs" />
     <Compile Include="Quests\StudyOfTheSolenHive\StudyOfSolenQuest.cs" />
     <Compile Include="Quests\Mad Scientist\Items\SuteksDirtyGear.cs" />
-    <Compile Include="Items\Quest\FlaskOfOil.cs" />
     <Compile Include="Items\Quest\ModifiedClockworkAssembly.cs" />
     <Compile Include="Items\Quest\SecretWallTeleporters.cs" />
     <Compile Include="Mobiles\NPCs\Vollem.cs" />
@@ -3437,12 +3480,6 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Services\MaginciaBazaar\VendorTile.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Items\Addons\MailboxEastAddon.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Items\Addons\MailboxSouthAddon.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Items\Addons\MediumStoneTableEastAddon.cs">
@@ -8701,50 +8738,11 @@
     <Compile Include="Mobiles\AI\HealerAI.cs">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Mobiles\AI\MageAI.cs">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Mobiles\AI\MeleeAI.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Mobiles\AI\MysticAI.cs" />
-    <Compile Include="Mobiles\AI\NecroMageAI.cs">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Mobiles\AI\NinjaAI.cs" />
-    <Compile Include="Mobiles\AI\Omni AI\AITester.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Bushido.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Chivalry.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Core.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Magery.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Mysicism.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Necromancy.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Ninjitsu.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Shared.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniAI Spellweaving.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Mobiles\AI\Omni AI\OmniIA Bard.cs">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Mobiles\AI\OppositionGroup.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -8761,7 +8759,6 @@
     <Compile Include="Mobiles\AI\SpellbinderAI.cs">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Mobiles\AI\SpellWeavingAI.cs" />
     <Compile Include="Mobiles\AI\ThiefAI.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -9612,6 +9609,10 @@
     <Compile Include="Services\Harvest\HarvestVein.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Services\Malas\Sphynx\AncientWall.cs" />
+    <Compile Include="Services\Malas\Sphynx\Generate.cs" />
+    <Compile Include="Services\Malas\Sphynx\Sphynx.cs" />
+    <Compile Include="Services\Malas\Sphynx\SphynxFortune.cs" />
     <Compile Include="Services\MiniChampionSystem\MiniChampionSpawn.cs" />
     <Compile Include="Services\MiniChampionSystem\MiniChampSpawnInfo.cs" />
     <Compile Include="Services\MiniChampionSystem\MiniChampType.cs" />
@@ -9672,6 +9673,17 @@
     <Compile Include="Services\New Magincia\MaginciaPlants\Hoe.cs" />
     <Compile Include="Services\New Magincia\MaginciaPlants\MaginciaPlantItem.cs" />
     <Compile Include="Services\New Magincia\MaginciaPlants\MaginciaPlantSystem.cs" />
+    <Compile Include="Services\Pet Training\AbilityProfile.cs" />
+    <Compile Include="Services\Pet Training\AreaEffects.cs" />
+    <Compile Include="Services\Pet Training\EthologistTitleDeed.cs" />
+    <Compile Include="Services\Pet Training\Gumps.cs" />
+    <Compile Include="Services\Pet Training\PetTrainingGate.cs" />
+    <Compile Include="Services\Pet Training\PetTrainingHelper.cs" />
+    <Compile Include="Services\Pet Training\PlanningProfile.cs" />
+    <Compile Include="Services\Pet Training\SpecialAbility.cs" />
+    <Compile Include="Services\Pet Training\TrainingDefinition.cs" />
+    <Compile Include="Services\Pet Training\TrainingPoint.cs" />
+    <Compile Include="Services\Pet Training\TrainingProfile.cs" />
     <Compile Include="Services\Plants\FertileDirtGump.cs" />
     <Compile Include="Services\Plants\Raised Garden Beds\RaisedGarden.cs" />
     <Compile Include="Services\Plants\Raised Garden Beds\RaisedGardenPlantItem.cs" />
@@ -10000,6 +10012,11 @@
     <Compile Include="Services\TreasuresOfKotlCity\RewardGump.cs" />
     <Compile Include="Services\TreasuresOfKotlCity\Rewards.cs" />
     <Compile Include="Services\TreasuresOfTokuno\TreasuresOfTokunoPersistence.cs" />
+    <Compile Include="Services\UltimaStore\PlayerProfile.cs" />
+    <Compile Include="Services\UltimaStore\StoreEntry.cs" />
+    <Compile Include="Services\UltimaStore\SystemConfig.cs" />
+    <Compile Include="Services\UltimaStore\UltimaStore.cs" />
+    <Compile Include="Services\UltimaStore\UltimaStoreGump.cs" />
     <Compile Include="Services\Underworld\Navrey%27s Lair\NavreysController.cs" />
     <Compile Include="Services\Underworld\Navrey%27s Lair\NavreysPillar.cs" />
     <Compile Include="Services\Vendor Searching\VendorSearch.cs" />
@@ -10010,6 +10027,7 @@
     <Compile Include="Services\VeteranRewards\CrystalPortals\CrystalPortal.cs" />
     <Compile Include="Services\VeteranRewards\CrystalPortals\CrystalPortalGump.cs" />
     <Compile Include="Services\VeteranRewards\DaviesLocker.cs" />
+    <Compile Include="Services\VeteranRewards\StatRewardGump.cs" />
     <Compile Include="Services\ViceVsVirtue\CityInfo.cs" />
     <Compile Include="Services\ViceVsVirtue\GuildStats.cs" />
     <Compile Include="Services\ViceVsVirtue\Gumps\BattleStatsGump.cs" />
@@ -12458,6 +12476,7 @@
     <Content Include="Services\Revamped Dungeons\DespiseRevamped\Read Me.txt" />
     <Content Include="Services\Revamped Dungeons\Shame Revamped\Read Me.txt" />
     <Content Include="Services\RunicReforging\ReadMe.txt" />
+    <Content Include="Services\UltimaStore\ReadMe.txt" />
     <Content Include="Services\XmlSpawner\XMLSpawner Extras\SpawnerConfigs\xmlspawner.xml" />
     <Content Include="Services\XmlSpawner\XMLSpawner Extras\Spawns\attachtest1.xml" />
     <Content Include="Services\XmlSpawner\XMLSpawner Extras\Spawns\attachtest2.xml" />
@@ -12562,7 +12581,6 @@
     <Content Include="Services\XmlSpawner\XMLSpawner Extras\XmlSockets\XmlSockets log.txt" />
     <Content Include="Services\XmlSpawner\XMLSpawner Support\xmlspawner2.txt" />
     <Content Include="Services\XmlSpawner\XMLSpawner Support\xmlspawner2doc.txt" />
-    <Content Include="Spells\Mysticism\Blank.txt" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSHARP.Targets" />

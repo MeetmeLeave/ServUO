@@ -16,7 +16,7 @@ namespace Server.Spells
         public override bool ClearHandsOnCast { get { return false; } }
         public override bool RevealOnCast { get { return false; } }
         public override double CastDelayFastScalar { get { return 0; } }
-        public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(1.0); } }
+        public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(2.0); } }
         public override TimeSpan GetCastRecovery() { return TimeSpan.Zero; }
         public override int GetMana() { return 0; }
         public override bool ConsumeReagents() { return true; }
@@ -52,34 +52,7 @@ namespace Server.Spells
                 return false;
             }
 
-            BlockMountType type = BaseMount.GetMountPrevention(mob);
-
-            if (type == BlockMountType.None)
-                return true;
-
-            if (message)
-            {
-                switch (type)
-                {
-                    case BlockMountType.Dazed:
-                        {
-                            mob.SendLocalizedMessage(1112457); // You are still too dazed to fly.
-                            break;
-                        }
-                    case BlockMountType.BolaRecovery:
-                        {
-                            mob.SendLocalizedMessage(1112455); // You cannot fly while recovering from a bola throw.
-                            break;
-                        }
-                    case BlockMountType.DismountRecovery:
-                        {
-                            mob.SendLocalizedMessage(1112456); // You cannot fly while recovering from a dismount maneuver.
-                            break;
-                        }
-                }
-            }
-
-            return false;
+            return true;
         }
 
         public override bool CheckCast()

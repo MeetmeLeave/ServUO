@@ -84,7 +84,7 @@ namespace Server.Spells.SkillMasteries
             if (IsInCooldown(Caster, this.GetType()))
                 return false;
             
-            if (Caster.Skills[CastSkill].Value < RequiredSkill)
+            if (Caster.Player && Caster.Skills[CastSkill].Value < RequiredSkill)
                 Caster.SendLocalizedMessage(1115709); // Your skills are not high enough to invoke this mastery ability.
             else if (Caster is PlayerMobile && Caster.Skills.CurrentMastery != CastSkill)
                 Caster.SendLocalizedMessage(1115664); // You are not on the correct path for using this mastery ability.
@@ -136,6 +136,9 @@ namespace Server.Spells.SkillMasteries
 
         public bool CheckWeapon()
         {
+            if (!Caster.Player)
+                return true;
+
             BaseWeapon wep = GetWeapon();
 
             if (CastSkill == SkillName.Poisoning && wep != null && !(wep is Fists))
@@ -367,14 +370,16 @@ namespace Server.Spells.SkillMasteries
             return (int)MasteryInfo.GetMasteryLevel(Caster, CastSkill);
         }
 
-		
-		public List<Mobile> GetParty()
-		{
-			if(!PartyEffects)
-				return null;
-				
-			Party p = Party.Get( Caster );
-            List<Mobile> list = new List<Mobile>();
+        /// <summary>
+        /// Gets dynamic enumeration of party members and pets withing party range
+        /// </summary>
+        /// <returns></returns>
+        public IEnumerable<Mobile> GetParty()
+        {
+            if (!PartyEffects)
+                yield break;
+
+            Party p = Party.Get(Caster);
 
             if (p != null)
             {
@@ -382,6 +387,9 @@ namespace Server.Spells.SkillMasteries
 
                 foreach (Mobile mob in eable)
                 {
+                    if (mob == Caster)
+                        yield return mob;
+
                     Mobile check = mob;
 
                     if (mob is BaseCreature && (((BaseCreature)mob).Summoned || ((BaseCreature)mob).Controlled))
@@ -389,24 +397,31 @@ namespace Server.Spells.SkillMasteries
 
                     if (check != null && p.Contains(check))
                     {
-                        list.Add(mob);
-
                         if (PartyList == null)
                             PartyList = new List<Mobile>();
 
                         if (!PartyList.Contains(mob))
                             PartyList.Add(mob);
+
+                        yield return mob;
                     }
                 }
 
                 eable.Free();
             }
+            else
+            {
+                if (Caster is PlayerMobile)
+                {
+                    foreach (var m in ((PlayerMobile)Caster).AllFollowers.Where(x => Caster.InRange(x.Location, PartyRange)))
+                    {
+                        yield return m;
+                    }
+                }
 
-            if (!list.Contains(Caster))
-                list.Add(Caster);
-
-			return list;
-		}
+                yield return Caster;
+            }
+        }
 		
 		private static Dictionary<Mobile, List<SkillMasterySpell>> m_Table = new Dictionary<Mobile, List<SkillMasterySpell>>();
 
@@ -475,6 +490,17 @@ namespace Server.Spells.SkillMasteries
 			return null;
 		}
 
+        public static TSpell GetSpell<TSpell>(Func<SkillMasterySpell, bool> predicate) where TSpell : SkillMasterySpell
+        {
+            foreach (SkillMasterySpell spell in EnumerateAllSpells().Where(sp => sp.GetType() == typeof(TSpell)))
+            {
+                if (predicate != null && predicate(spell))
+                    return spell as TSpell;
+            }
+
+            return null;
+        }
+
         public static IEnumerable<SkillMasterySpell> GetSpells(Func<SkillMasterySpell, bool> predicate)
         {
             foreach (SkillMasterySpell spell in EnumerateAllSpells())
@@ -521,21 +547,25 @@ namespace Server.Spells.SkillMasteries
         public static SkillMasterySpell GetSpellForParty(Mobile from, Type type)
         {
             CheckTable(from);
+            Mobile check = from;
+
+            if (from is BaseCreature && (((BaseCreature)from).Controlled || ((BaseCreature)from).Summoned) && ((BaseCreature)from).GetMaster() != null)
+            {
+                check = ((BaseCreature)from).GetMaster();
+                CheckTable(check);
+            }
 
             //First checks the caster
-            if (m_Table.ContainsKey(from))
+            if (m_Table.ContainsKey(check))
             {
-                foreach (SkillMasterySpell spell in m_Table[from])
+                foreach (SkillMasterySpell spell in m_Table[check])
+                {
                     if (spell != null && spell.GetType() == type)
                         return spell;
+                }
             }
             else
             {
-                Mobile check = from;
-
-                if (from is BaseCreature && (((BaseCreature)from).Controlled || ((BaseCreature)from).Summoned))
-                    check = ((BaseCreature)from).GetMaster();
-
                 Party p = Party.Get(check);
 
                 if (p != null)
@@ -544,7 +574,7 @@ namespace Server.Spells.SkillMasteries
                     {
                         SkillMasterySpell spell = GetSpell(info.Mobile, type);
 
-                        if (spell != null && spell.PartyEffects && from.InRange(info.Mobile.Location, spell.PartyRange))
+                        if (spell != null && spell.PartyEffects && from.InRange(info.Mobile.Location, spell.PartyRange) && spell.CheckPartyEffects(info.Mobile))
                             return spell;
                     }
                 }
@@ -553,10 +583,35 @@ namespace Server.Spells.SkillMasteries
             return null;
         }
 
+        public virtual bool CheckPartyEffects(Mobile m, bool beneficial = false)
+        {
+            if (m == Caster)
+                return true;
+
+            if (Caster.IsBeneficialCriminal(m))
+            {
+                int casterNoto = Notoriety.Compute(Caster, m);
+                int mNoto = Notoriety.Compute(m, Caster);
+
+                if (casterNoto == Notoriety.Enemy || casterNoto != mNoto)
+                {
+                    return false;
+                }
+            }
+
+            if (beneficial)
+                Caster.DoBeneficial(m);
+
+            return true;
+        }
+
         private static object _Lock = new object();
 
         public static void CheckTable(Mobile m)
         {
+            if (m == null)
+                return;
+
             lock (_Lock)
             {
                 if (m_Table.ContainsKey(m))
@@ -698,7 +753,7 @@ namespace Server.Spells.SkillMasteries
             if (spell != null)
                 spell.AbsorbDamage(ref damage);
 
-            CombatTrainingSpell.CheckDamage(damager, victim, ref damage);
+            CombatTrainingSpell.CheckDamage(damager, victim, type, ref damage);
 		}
 
         /// <summary>

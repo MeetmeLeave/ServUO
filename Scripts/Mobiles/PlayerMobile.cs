@@ -47,6 +47,7 @@ using Server.Spells.SkillMasteries;
 using Server.Engines.VvV;
 
 using RankDefinition = Server.Guilds.RankDefinition;
+using Server.Engines.SphynxFortune;
 #endregion
 
 namespace Server.Mobiles
@@ -88,6 +89,7 @@ namespace Server.Mobiles
         RefuseTrades = 0x40000000,
         DisabledPvpWarning = 0x80000000,
         CanBuyCarpets = 0x100000000,
+        VoidPool = 0x200000000
     }
 
 	public enum NpcGuild
@@ -132,29 +134,37 @@ namespace Server.Mobiles
 		#endregion
 
 		#region Stygian Abyss
-		public override void ToggleFlying()
-		{
-			if (Race != Race.Gargoyle)
-				return;
+        public override void ToggleFlying()
+        {
+            if (Race != Race.Gargoyle)
+                return;
+
+            if (Frozen)
+            {
+                SendLocalizedMessage(1060170); // You cannot use this ability while frozen.
+                return;
+            }
 
             if (!Flying)
             {
-                if (Spell == null)
-                {
-                    Spell spell = new FlySpell(this);
+                if (this.Spell is Spell)
+                    ((Spell)this.Spell).Disturb(DisturbType.Unspecified, false, false);
 
-                    spell.Cast();
-                }
+                Spell spell = new FlySpell(this);
+                spell.Cast();
             }
             else if (IsValidLandLocation(Location, Map))
             {
+                if (this.Spell is Spell)
+                    ((Spell)this.Spell).Disturb(DisturbType.Unspecified, false, false);
+
                 Animate(AnimationType.Land, 0);
                 Flying = false;
                 BuffInfo.RemoveBuff(this, BuffIcon.Fly);
             }
             else
                 LocalOverheadMessage(MessageType.Regular, 0x3B2, 1113081); // You may not land here.
-		}
+        }
 
         public static bool IsValidLandLocation(Point3D p, Map map)
         {
@@ -275,6 +285,55 @@ namespace Server.Mobiles
             set
             {
             }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int AccountSovereigns
+        {
+            get
+            {
+                var acct = Account as Account;
+
+                if (acct != null)
+                {
+                    return acct.Sovereigns;
+                }
+
+                return 0;
+            }
+            set
+            {
+                var acct = Account as Account;
+
+                if (acct != null)
+                {
+                    acct.SetSovereigns(value);
+                }
+            }
+        }
+
+        public bool DepositSovereigns(int amount)
+        {
+            var acct = Account as Account;
+
+            if (acct != null)
+            {
+                return acct.DepositSovereigns(amount);
+            }
+
+            return false;
+        }
+
+        public bool WithdrawSovereigns(int amount)
+        {
+            var acct = Account as Account;
+
+            if (acct != null)
+            {
+                return acct.WithdrawSovereigns(amount);
+            }
+
+            return false;
         }
         #endregion
 
@@ -447,6 +506,13 @@ namespace Server.Mobiles
         {
             get { return GetFlag(PlayerFlag.CanBuyCarpets); }
             set { SetFlag(PlayerFlag.CanBuyCarpets, value); }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool VoidPool
+        {
+            get { return GetFlag(PlayerFlag.VoidPool); }
+            set { SetFlag(PlayerFlag.VoidPool, value); }
         }
 
         #region Plant system
@@ -807,7 +873,7 @@ namespace Server.Mobiles
             int SkillId = e.SkillID;
             IEntity target = e.Target;
 
-            if (from == null || target == null || target == null)
+            if (from == null || target == null)
                 return;
 
             from.TargetLocked = true;
@@ -1090,11 +1156,6 @@ namespace Server.Mobiles
 
 		public override int GetMinResistance(ResistanceType type)
 		{
-			if (IsStaff())
-			{
-				return -100;
-			}
-
 			int magicResist = (int)(Skills[SkillName.MagicResist].Value * 10);
 			int min = int.MinValue;
 
@@ -1113,7 +1174,7 @@ namespace Server.Mobiles
         #region City Loyalty
         public override int GetResistance(ResistanceType type)
         {
-            int resistance = base.GetResistance(type);
+            int resistance = base.GetResistance(type) + SphynxFortune.GetResistanceBonus(this, type);
 
             if (Server.Engines.CityLoyalty.CityLoyaltySystem.HasTradeDeal(this, Server.Engines.CityLoyalty.TradeDeal.SocietyOfClothiers))
             {
@@ -1680,11 +1741,17 @@ namespace Server.Mobiles
 			}
 		}
 
+        public override void OnSubItemRemoved(Item item)
+        {
+            if (Server.Engines.UOStore.UltimaStore.HasPendingItem(this))
+                Timer.DelayCall<PlayerMobile>(TimeSpan.FromSeconds(1.5), Server.Engines.UOStore.UltimaStore.CheckPendingItem, this);
+        }
+
         public override void AggressiveAction(Mobile aggressor, bool criminal)
         {
             base.AggressiveAction(aggressor, criminal);
 
-            if (aggressor is BaseCreature && ((BaseCreature)aggressor).ControlMaster != null)
+            if (aggressor is BaseCreature && ((BaseCreature)aggressor).ControlMaster != null && ((BaseCreature)aggressor).ControlMaster != this)
             {
                 Mobile aggressiveMaster = ((BaseCreature)aggressor).ControlMaster;
 
@@ -2058,11 +2125,6 @@ namespace Server.Mobiles
                 }
             }
 
-            if (oldValue < HitsMax && Hits >= HitsMax)
-            {
-                BaseMount.GetMountPrevention(this);
-            }
-
             base.OnHitsChange(oldValue);
         }
 
@@ -2293,13 +2355,19 @@ namespace Server.Mobiles
 					list.Add(new CallbackEntry(6157, CancelProtection));
 				}
 
-                Region r = Region.Find(Location, Map);
-
                 #region Void Pool
-                var controller = Map == Map.Trammel ? VoidPoolController.InstanceTram : VoidPoolController.InstanceFel;
+                if (VoidPool || Region.IsPartOf<VoidPoolRegion>())
+                {
+                    var controller = Map == Map.Felucca ? VoidPoolController.InstanceFel : VoidPoolController.InstanceTram;
 
-                if (controller != null)
-                    list.Add(new Server.Engines.Points.VoidPoolInfo(this));
+                    if (controller != null)
+                    {
+                        if (!VoidPool)
+                            VoidPool = true;
+
+                        list.Add(new Server.Engines.Points.VoidPoolInfo(this, controller));
+                    }
+                }
                 #endregion
 
                 #region TOL Shadowguard
@@ -2471,7 +2539,7 @@ namespace Server.Mobiles
             {
                 if (!item.PayedInsurance)
                 {
-                    int cost = item.GetInsuranceCost();
+                    int cost = GetInsuranceCost(item);
 
                     if (Banker.Withdraw(from, cost))
                     {
@@ -2495,6 +2563,28 @@ namespace Server.Mobiles
                     SendLocalizedMessage(1060868, "", 0x23); // Target the item you wish to toggle insurance status on <ESC> to cancel
                 }
             }
+        }
+
+        public static int GetInsuranceCost(Item item)
+        {
+            var imbueWeight = SkillHandlers.Imbuing.GetTotalWeight(item);
+            int cost = 600; // this handles old items, set items, etc
+
+            if (item.GetType().IsAssignableFrom(typeof(Factions.FactionItem)))
+                cost = 800;
+            else if (imbueWeight > 0)
+                cost = Math.Min(800, Math.Max(10, imbueWeight));
+            else if (Mobiles.GenericBuyInfo.BuyPrices.ContainsKey(item.GetType()))
+                cost = Math.Min(800, Math.Max(10, Mobiles.GenericBuyInfo.BuyPrices[item.GetType()]));
+            else if (item.LootType == LootType.Newbied)
+                return 10;
+
+            var negAttrs = RunicReforging.GetNegativeAttributes(item);
+
+            if (negAttrs != null && negAttrs.Prized > 0)
+                cost *= 2;
+
+            return cost;
         }
 
         private void AutoRenewInventoryInsurance()
@@ -2710,7 +2800,7 @@ namespace Server.Mobiles
                 for (int i = 0; i < items.Length; ++i)
                 {
                     if (insure[i])
-                        cost += items[i].GetInsuranceCost();
+                        cost += GetInsuranceCost(items[i]);
                 }
 
                 AddHtmlLocalized(15, 420, 300, 20, 1114310, 0x7FFF, false, false); // GOLD AVAILABLE:
@@ -2735,12 +2825,12 @@ namespace Server.Mobiles
                     if (insure[i])
                     {
                         AddButton(400, y, 9723, 9724, 100 + i, GumpButtonType.Reply, 0);
-                        AddLabel(250, y, 0x481, item.GetInsuranceCost().ToString());
+                        AddLabel(250, y, 0x481, GetInsuranceCost(item).ToString());
                     }
                     else
                     {
                         AddButton(400, y, 9720, 9722, 100 + i, GumpButtonType.Reply, 0);
-                        AddLabel(250, y, 0x66C, item.GetInsuranceCost().ToString());
+                        AddLabel(250, y, 0x66C, GetInsuranceCost(item).ToString());
                     }
                 }
 
@@ -3105,6 +3195,19 @@ namespace Server.Mobiles
 
 			return true;
 		}
+
+        public override bool OnDragLift(Item item)
+        {
+            if (item is IPromotionalToken && ((IPromotionalToken)item).GumpType != null)
+            {
+                Type t = ((IPromotionalToken)item).GumpType;
+
+                if (HasGump(t))
+                    CloseGump(t);
+            }
+
+            return base.OnDragLift(item);
+        }
 
 		public override bool CheckTrade(
 			Mobile to, Item item, SecureTradeContainer cont, bool message, bool checkItems, int plusItems, int plusWeight)
@@ -3615,7 +3718,7 @@ namespace Server.Mobiles
 					return true;
 				}
 
-                int insuredAmount = item.GetInsuranceCost();
+                int insuredAmount = GetInsuranceCost(item);
 				if (AutoRenewInsurance)
 				{
 					int cost = (m_InsuranceAward == null ? insuredAmount : insuredAmount / 2);
@@ -4966,10 +5069,19 @@ namespace Server.Mobiles
 
 		public override bool CanSee(Item item)
 		{
-			if (m_DesignContext != null && m_DesignContext.Foundation.IsHiddenToCustomizer(item))
+			if (m_DesignContext != null && m_DesignContext.Foundation.IsHiddenToCustomizer(this, item))
 			{
 				return false;
 			}
+            else if (AccessLevel == AccessLevel.Player)
+            {
+                Region r = item.GetRegion();
+
+                if (r is BaseRegion && !((BaseRegion)r).CanSee(this, item))
+                {
+                    return false;
+                }
+            }
 
 			return base.CanSee(item);
 		}
@@ -5656,18 +5768,21 @@ namespace Server.Mobiles
 
 		public override void OnSkillChange(SkillName skill, double oldBase)
 		{
-			if (Young && SkillsTotal >= 4500)
+			if (Young)
 			{
-				Account acc = Account as Account;
+                if (SkillsTotal >= 4500 || (!Core.AOS && Skills[skill].Base >= 80.0))
+                {
+                    Account acc = Account as Account;
 
-				if (acc != null)
-				{
-					acc.RemoveYoungStatus(1019036);
-					// You have successfully obtained a respectable skill level, and have outgrown your status as a young player!
-				}
+                    if (acc != null)
+                    {
+                        acc.RemoveYoungStatus(1019036);
+                        // You have successfully obtained a respectable skill level, and have outgrown your status as a young player!
+                    }
+                }
 			}
 
-            if (Skills.CurrentMastery == skill && Skills[skill].Value < MasteryInfo.MinSkillRequirement)
+            if (skill != SkillName.Alchemy && Skills.CurrentMastery == skill && Skills[skill].Value < MasteryInfo.MinSkillRequirement)
             {
                 SendLocalizedMessage(1156236, String.Format("{0}\t{1}", MasteryInfo.MinSkillRequirement.ToString(), Skills[skill].Info.Name)); // You need at least ~1_SKILL_REQUIREMENT~ ~2_SKILL_NAME~ skill to use that mastery.
 

@@ -1115,6 +1115,7 @@ namespace Server.Gumps
                     case 1156477: return 1156476; // This title is obtained by completing the Valley of One Quest in the Valley of Eodon.
                     case 1155727: return 1155728; // This title is obtained from the Huntmaster's Challenge at the Ranger's Guild in Skara Brae.
                     case 1156318: return 1156319; // This is a reward title given for completing Shadowguard.
+                    case 1157594: return 1157595; // This title is obtained by completing the "Discovering Animal Training" quest.
                 }
             }
 
@@ -1131,10 +1132,7 @@ namespace Server.Gumps
         {
             IEnumerable<int> list = User.RewardTitles.OfType<int>().Where(i => IsCityTitle(i));
 
-            if (list != null)
-                return list.ToList();
-
-            return null;
+            return list.ToList();
         }
 
         public void Refresh(bool recompile = true)

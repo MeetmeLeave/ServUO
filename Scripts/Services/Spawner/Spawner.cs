@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Linq;
 using Server.Commands;
 using Server.Items;
 using CPA = Server.CommandPropertyAttribute;
-using System.Linq;
+using Server.Gumps;
 
 namespace Server.Mobiles
 {
@@ -138,10 +139,38 @@ namespace Server.Mobiles
         public int Team { get { return m_Team;  } set { m_Team = value; InvalidateProperties(); } }
 
         [CommandProperty(AccessLevel.Spawner)]
-        public TimeSpan MinDelay { get { return m_MinDelay; } set { m_MinDelay = value; InvalidateProperties(); } }
+        public TimeSpan MinDelay 
+        { 
+            get { return m_MinDelay; } 
+            set 
+            {
+                var old = m_MinDelay;
+
+                m_MinDelay = value;
+                
+                if(old != m_MinDelay && m_Running)
+                    DoTimer(); 
+                
+                InvalidateProperties();
+            } 
+        }
 
         [CommandProperty(AccessLevel.Spawner)]
-        public TimeSpan MaxDelay { get { return m_MaxDelay; } set { m_MaxDelay = value; InvalidateProperties(); } }
+        public TimeSpan MaxDelay
+        { 
+            get { return m_MaxDelay; } 
+            set 
+            {
+                var old = m_MaxDelay;
+
+                m_MaxDelay = value;
+
+                if (old != m_MaxDelay && m_Running)
+                    DoTimer(); 
+                
+                InvalidateProperties();
+            }
+        }
 
         public DateTime End { get { return m_End; } set { m_End = value; } }
 
@@ -197,11 +226,19 @@ namespace Server.Mobiles
 
         public override void OnDoubleClick(Mobile from)
         {
-            if (from.AccessLevel < AccessLevel.Spawner)
+            if (!from.Player || from.AccessLevel < AccessLevel.Spawner)
                 return;
 
-            SpawnerGump g = new SpawnerGump(this);
-            from.SendGump(g);
+            SpawnerGump gump = BaseGump.GetGump<SpawnerGump>((PlayerMobile)from, g => g.Spawner == this);
+
+            if (gump != null)
+            {
+                gump.Refresh();
+            }
+            else
+            {
+                BaseGump.SendGump(new SpawnerGump(from, this));
+            }
         }
 
         public override void GetProperties(ObjectPropertyList list)
@@ -581,7 +618,10 @@ namespace Server.Mobiles
             m_End = DateTime.UtcNow + delay;
 
             if (m_Timer != null)
+            {
                 m_Timer.Stop();
+                m_Timer = null;
+            }
 
             m_Timer = new InternalTimer(this, delay);
             m_Timer.Start();
@@ -706,7 +746,9 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write((int)5); // version
+            writer.Write((int)6); // version
+            writer.Write(m_SpawnRange);
+
             writer.Write(m_WalkingRange);
 
             writer.Write(m_WayPoint);
@@ -728,21 +770,6 @@ namespace Server.Mobiles
             {
                 m_SpawnObjects[i].Serialize(writer);
             }
-
-            /*writer.Write(m_Spawned.Count);
-            foreach(var kvp in m_Spawned)
-            {
-                ISpawnable e = kvp.Key;
-
-                if (e is Item)
-                    writer.Write((Item)e);
-                else if (e is Mobile)
-                    writer.Write((Mobile)e);
-                else
-                    writer.Write(Serial.MinusOne);
-
-                
-            }*/
         }
 
         public override void Deserialize(GenericReader reader)
@@ -753,6 +780,12 @@ namespace Server.Mobiles
 
             switch ( version )
             {
+                case 6:
+                    {
+                        m_SpawnRange = reader.ReadInt();
+
+                        goto case 5;
+                    }
                 case 5:
                 case 4:
                     {
@@ -1059,9 +1092,8 @@ namespace Server.Mobiles
 
             protected override void OnTick()
             {
-                if (m_Spawner != null)
-                    if (!m_Spawner.Deleted)
-                        m_Spawner.OnTick();
+                if (m_Spawner != null && !m_Spawner.Deleted)
+                    m_Spawner.OnTick();
             }
         }
 

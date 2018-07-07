@@ -17,6 +17,7 @@ using Server.Engines.CityLoyalty;
 using Server.Spells.SkillMasteries;
 using System.Linq;
 using Server.Misc;
+using Server.Engines.SphynxFortune;
 
 namespace Server
 {
@@ -136,21 +137,11 @@ namespace Server
             {
                 switch (Utility.Random(5))
                 {
-                    case 0:
-                        phys += chaos;
-                        break;
-                    case 1:
-                        fire += chaos;
-                        break;
-                    case 2:
-                        cold += chaos;
-                        break;
-                    case 3:
-                        pois += chaos;
-                        break;
-                    case 4:
-                        nrgy += chaos;
-                        break;
+                    case 0: phys += chaos; break;
+                    case 1: fire += chaos; break;
+                    case 2: cold += chaos; break;
+                    case 3: pois += chaos; break;
+                    case 4: nrgy += chaos; break;
                 }
             }
 
@@ -210,7 +201,7 @@ namespace Server
             // object being damaged is not a mobile, so we will end here
             if (m == null)
             {
-                damageable.Damage(totalDamage, from);
+                damageable.Damage(totalDamage, from, (int)type);
                 return totalDamage;
             }
 
@@ -250,7 +241,7 @@ namespace Server
                         from.Damage(originalDamage, m);
                     }
                 }
-                else if (!ignoreArmor)
+                else if (!ignoreArmor && from != m)
                 {
                     int reflectPhys = Math.Min(105, AosAttributes.GetValue(m, AosAttribute.ReflectPhysical));
 
@@ -309,13 +300,6 @@ namespace Server
                 SwarmContext.CheckRemove(m);
             #endregion
 
-            #region Skill Mastery
-            SkillMasterySpell.OnDamage(m, from, type, ref totalDamage);
-            #endregion
-
-            if (keepAlive && totalDamage > m.Hits)
-                totalDamage = m.Hits;
-
             SpiritualityVirtue.GetDamageReduction(m, ref totalDamage);
 
             #region Berserk
@@ -336,8 +320,69 @@ namespace Server
                 }
             }
 
+            #region Skill Mastery
+            SkillMasterySpell.OnDamage(m, from, type, ref totalDamage);
+            #endregion
+
+            #region Pet Training
+            if (PetTrainingHelper.Enabled)
+            {
+                if (from is BaseCreature || m is BaseCreature)
+                {
+                    SpecialAbility.CheckCombatTrigger(from, m, ref totalDamage, type);
+
+                    if (from is BaseCreature && m is BaseCreature)
+                    {
+                        var profile = PetTrainingHelper.GetTrainingProfile((BaseCreature)from);
+
+                        if (profile != null)
+                        {
+                            profile.CheckProgress((BaseCreature)m);
+                        }
+
+                        profile = PetTrainingHelper.GetTrainingProfile((BaseCreature)m);
+
+                        if (profile != null && 0.3 > Utility.RandomDouble())
+                        {
+                            profile.CheckProgress((BaseCreature)from);
+                        }
+                    }
+                }
+
+                if (from is BaseCreature && ((BaseCreature)from).Controlled && m.Player)
+                {
+                    totalDamage /= 2;
+                }
+            }
+            #endregion
+
+            if (keepAlive && totalDamage > m.Hits)
+                totalDamage = m.Hits;
+
+            if (from is BaseCreature && type <= DamageType.Ranged)
+            {
+                ((BaseCreature)from).AlterMeleeDamageTo(m, ref totalDamage);
+            }
+
+            if (m is BaseCreature && type <= DamageType.Ranged)
+            {
+                ((BaseCreature)m).AlterMeleeDamageFrom(from, ref totalDamage);
+            }
+
+            if (m is BaseCreature)
+            {
+                ((BaseCreature)m).OnBeforeDamage(from, ref totalDamage, type);
+            }
+
+            if (totalDamage <= 0)
+            {
+                return 0;
+            }
+
             if (from != null)
+            {
                 DoLeech(totalDamage, from, m);
+            }
 
             m.Damage(totalDamage, from, true, false);
             SpiritSpeak.CheckDisrupt(m);
@@ -428,9 +473,9 @@ namespace Server
                 case 13: return Math.Min(4, AosAttributes.GetValue(from, AosAttribute.CastSpeed));
                 case 14: return Math.Min(40, AosAttributes.GetValue(from, AosAttribute.LowerManaCost)) + BaseArmor.GetInherentLowerManaCost(from);
                 
-                case 15: return GetManaRegen(from); // HP   REGEN
-                case 16: return GetStamRegen(from); // Stam REGEN
-                case 17: return GetManaRegen(from); // MANA REGEN
+                case 15: return RegenRates.HitPointRegen(from); // HP   REGEN
+                case 16: return RegenRates.StamRegen(from); // Stam REGEN
+                case 17: return RegenRates.ManaRegen(from); // MANA REGEN
                 case 18: return Math.Min(105, AosAttributes.GetValue(from, AosAttribute.ReflectPhysical)); // reflect phys
                 case 19: return Math.Min(50, AosAttributes.GetValue(from, AosAttribute.EnhancePotions)); // enhance pots
 
@@ -447,57 +492,6 @@ namespace Server
                 case 28: return AosAttributes.GetValue(from, AosAttribute.BonusMana); // mana inc
 				default: return 0;
 			}
-        }
-
-        private static int GetHitsRegen(Mobile m)
-        {
-            int regen = AosAttributes.GetValue(m, AosAttribute.RegenHits);
-
-            if (RegenRates.CheckAnimal(m, typeof(Dog)) || RegenRates.CheckAnimal(m, typeof(Cat)))
-                regen += m.Skills[SkillName.Ninjitsu].Fixed / 30;
-
-            if (RegenRates.CheckTransform(m, typeof(HorrificBeastSpell)))
-                regen += 20;
-
-            regen += RampageSpell.GetBonus(m, RampageSpell.BonusType.HitPointRegen);
-            regen += CombatTrainingSpell.RegenBonus(m);
-            regen += BarrabHemolymphConcentrate.HPRegenBonus(m);
-
-            if (m.Race == Race.Human)
-                regen += 2;
-
-            return Math.Min(18, regen);
-        }
-
-        private static int GetStamRegen(Mobile m)
-        {
-            int regen = AosAttributes.GetValue(m, AosAttribute.RegenStam);
-
-            if (RegenRates.CheckTransform(m, typeof(VampiricEmbraceSpell)))
-                regen += 15;
-
-            if (RegenRates.CheckAnimal(m, typeof(Kirin)))
-                regen += 20;
-
-            regen += RampageSpell.GetBonus(m, RampageSpell.BonusType.StamRegen);
-
-            return regen;
-        }
-
-        private static int GetManaRegen(Mobile m)
-        {
-            int regen = AosAttributes.GetValue(m, AosAttribute.RegenMana);
-
-            if (RegenRates.CheckTransform(m, typeof(VampiricEmbraceSpell)))
-                regen += 3;
-
-            if (RegenRates.CheckTransform(m, typeof(LichFormSpell)))
-                regen += 13;
-
-            if (m.Race == Race.Gargoyle)
-                regen += 2;
-
-            return Math.Min(30, regen);
         }
         #endregion
     }
@@ -557,6 +551,9 @@ namespace Server
                 return 0;
 
             int value = 0;
+
+            if (attribute == AosAttribute.Luck || attribute == AosAttribute.RegenMana || attribute == AosAttribute.DefendChance || attribute == AosAttribute.EnhancePotions)
+                value += SphynxFortune.GetAosAttributeBonus(m, attribute);
 
             #region Enhancement
             value += Enhancement.GetValue(m, attribute);
@@ -670,7 +667,7 @@ namespace Server
             }
             else if (attribute == AosAttribute.CastSpeed)
             {
-                if (MonstrousInterredGrizzle.UnderCacophonicAttack(m) || LadyMelisande.UnderPutridNausea(m))
+                if (MonstrousInterredGrizzle.UnderCacophonicAttack(m) || AuraOfNausea.UnderNausea(m))
                     value -= 5;
 
                 if (EssenceOfWindSpell.IsDebuffed(m))
@@ -703,7 +700,7 @@ namespace Server
             }
             else if (attribute == AosAttribute.WeaponSpeed)
             {
-                if (MonstrousInterredGrizzle.UnderCacophonicAttack(m) || LadyMelisande.UnderPutridNausea(m))
+                if (MonstrousInterredGrizzle.UnderCacophonicAttack(m) || AuraOfNausea.UnderNausea(m))
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))
@@ -737,13 +734,16 @@ namespace Server
                 if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mysticism.StoneFormSpell)))
                     value -= 10;
 
-                if (MudPie.IsUnderEffects(m))
+                if (StickySkin.IsUnderEffects(m))
                     value -= 30;
                 #endregion
+
+                if (StickySkin.IsUnderEffects(m))
+                    value -= 60;
             }
             else if (attribute == AosAttribute.AttackChance)
             {
-                if (LadyMelisande.UnderPutridNausea(m))
+                if (AuraOfNausea.UnderNausea(m))
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))
@@ -785,7 +785,7 @@ namespace Server
             }
             else if (attribute == AosAttribute.DefendChance)
             {
-                if (LadyMelisande.UnderPutridNausea(m))
+                if (AuraOfNausea.UnderNausea(m))
                     value -= 60;
 
                 if (DivineFurySpell.UnderEffect(m))

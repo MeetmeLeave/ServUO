@@ -399,6 +399,15 @@ namespace Server.Spells
             return true;
         }
 
+        public static int GetBuffOffset(Mobile m, StatType type)
+        {
+            string name = String.Format("[Magic] {0} Buff", type);
+
+            StatMod mod = m.GetStatMod(name);
+
+            return mod != null ? mod.Offset : 0;
+        }
+
         public static bool AddStatCurse(Mobile caster, Mobile target, StatType type)
         {
             return AddStatCurse(caster, target, type, true);
@@ -407,6 +416,11 @@ namespace Server.Spells
         public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, bool blockSkill)
         {
             return AddStatCurse(caster, target, type, GetOffset(caster, target, type, true, blockSkill), TimeSpan.Zero);
+        }
+
+        public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, bool blockSkill, int offset)
+        {
+            return AddStatCurse(caster, target, type, offset, TimeSpan.Zero);
         }
 
         public static bool AddStatCurse(Mobile caster, Mobile target, StatType type, int curse, TimeSpan duration)
@@ -475,7 +489,8 @@ namespace Server.Spells
             {
                 if (!blockSkill)
                 {
-                    caster.CheckSkill(SkillName.EvalInt, 0.0, 120.0);
+                    //caster.CheckSkill(SkillName.EvalInt, 0.0, 120.0);
+                    // This is handled in Spell.cs
 
                     if (curse)
                         target.CheckSkill(SkillName.MagicResist, 0.0, 120.0);
@@ -1067,7 +1082,7 @@ namespace Server.Spells
             if (map == Map.Felucca && loc.X >= 6975 && loc.X <= 7042 && loc.Y >= 2048 && loc.Y <= 2115)
                 return true;
 
-            return map == Map.TerMur && loc.X >= 64 && loc.X <= 1015 && loc.Y >= 1344 && loc.Y <= 2239;
+            return map == Map.TerMur && loc.X >= 64 && loc.X <= 1087 && loc.Y >= 1344 && loc.Y <= 2495;
         }
 
         public static bool IsNewDungeon(Map map, Point3D loc)
@@ -1137,28 +1152,91 @@ namespace Server.Spells
         //magic reflection
         public static bool CheckReflect(int circle, Mobile caster, ref Mobile target)
         {
-            return CheckReflect(circle, ref caster, ref target);
+            IDamageable c = caster as IDamageable;
+            IDamageable t = target as IDamageable;
+
+            bool reflect = CheckReflect(circle, ref c, ref t);
+
+            if (c is Mobile)
+                caster = (Mobile)c;
+
+            if (t is Mobile)
+                target = (Mobile)t;
+
+            return reflect;
         }
 
-        public static bool CheckReflect(int circle, ref Mobile caster, ref Mobile target, DamageType type = DamageType.Spell)
+        public static bool CheckReflect(int circle, IDamageable caster, ref Mobile target)
+        {
+            IDamageable t = target as IDamageable;
+
+            bool reflect = CheckReflect(circle, ref caster, ref t);
+
+            if (t is Mobile)
+                caster = (Mobile)t;
+
+            return reflect;
+        }
+
+        public static bool CheckReflect(int circle, Mobile caster, ref IDamageable target)
+        {
+            IDamageable c = caster as IDamageable;
+
+            bool reflect = CheckReflect(circle, ref c, ref target);
+
+            if (c is Mobile)
+                caster = (Mobile)c;
+
+            return reflect;
+        }
+
+        public static bool CheckReflect(int circle, ref Mobile caster, ref IDamageable target, DamageType type = DamageType.Spell)
+        {
+            IDamageable c = caster as IDamageable;
+
+            bool reflect = CheckReflect(circle, ref c, ref target);
+
+            if (c is Mobile)
+                caster = (Mobile)c;
+
+            return reflect;
+        }
+
+        public static bool CheckReflect(int circle, ref Mobile caster, ref Mobile target)
+        {
+            return CheckReflect(circle, caster, ref target);
+        }
+
+        public static bool CheckReflect(int circle, ref IDamageable source, ref IDamageable defender, DamageType type = DamageType.Spell)
         {
             bool reflect = false;
+            Mobile target = defender as Mobile;
 
-            if (Core.AOS && type == DamageType.Spell)
+            if (Core.AOS && type >= DamageType.Spell)
             {
-                Clone clone = null;
-
-                if (target != null)
+                if (target != null && defender is Mobile)
                 {
-                    clone = MirrorImage.GetDeflect(caster, target);
+                    Clone clone = MirrorImage.GetDeflect(target, (Mobile)defender);
+
+                    if (clone != null)
+                    {
+                        defender = clone;
+                        return false;
+                    }
                 }
-
-                if (clone != null)
+                else if (defender is DamageableItem && ((DamageableItem)defender).CheckReflect(circle, source))
                 {
-                    target = clone;
-                    return false;
+                    IDamageable temp = source;
+                    source = defender;
+                    defender = temp;
+                    return true;
                 }
             }
+
+            Mobile caster = source as Mobile;
+
+            if (target == null || caster == null)
+                return false;
 
             if (target.MagicDamageAbsorb > 0)
             {
@@ -1184,7 +1262,7 @@ namespace Server.Spells
                     target.FixedEffect(0x37B9, 10, 5);
 
                     Mobile temp = caster;
-                    caster = target;
+                    source = target;
                     target = temp;
                 }
             }
@@ -1198,9 +1276,9 @@ namespace Server.Spells
                 {
                     target.FixedEffect(0x37B9, 10, 5);
 
-                    Mobile temp = caster;
-                    caster = target;
-                    target = temp;
+                    IDamageable temp = source;
+                    source = defender;
+                    defender = temp;
                 }
             }
 
@@ -1346,6 +1424,12 @@ namespace Server.Spells
 
             if (amount > 0 && target != from && from is PlayerMobile && target is PlayerMobile)
             {
+                if (SearingWounds.IsUnderEffects(target))
+                {
+                    amount /= 2;
+                    target.SendLocalizedMessage(1151178); // The cauterized wound resists some of your healing.
+                }
+
                 int realAmount = Math.Min(amount, target.HitsMax - target.Hits);
 
                 if (realAmount > 0 && target != from && from is PlayerMobile && target is PlayerMobile)
@@ -1392,29 +1476,22 @@ namespace Server.Spells
             }
         }
 
-        private class SpellDamageTimerAOS : Timer
+        public class SpellDamageTimerAOS : Timer
         {
-            private readonly IDamageable m_Target;
-
+            private IDamageable m_Target;
             private readonly Mobile m_From;
-
             private int m_Damage;
-            private readonly int m_Phys;
+            private int m_Phys;
+            private int m_Fire;
+            private int m_Cold;
+            private int m_Pois;
+            private int m_Nrgy;
+            private int m_Chaos;
+            private int m_Direct;
+            private DFAlgorithm m_DFA;
+            private Spell m_Spell;
 
-            private readonly int m_Fire;
-
-            private readonly int m_Cold;
-
-            private readonly int m_Pois;
-
-            private readonly int m_Nrgy;
-
-            private readonly int m_Chaos;
-
-            private readonly int m_Direct;
-
-            private readonly DFAlgorithm m_DFA;
-            private readonly Spell m_Spell;
+            public Spell Spell { get { return m_Spell; } }
 
             public SpellDamageTimerAOS(Spell s, IDamageable target, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, TimeSpan delay, DFAlgorithm dfa)
                 : base(delay)
@@ -1431,6 +1508,7 @@ namespace Server.Spells
                 m_Direct = direct;
                 m_DFA = dfa;
                 m_Spell = s;
+
                 if (m_Spell != null && m_Spell.DelayedDamage && !m_Spell.DelayedDamageStacking)
                     m_Spell.StartDelayedDamageContext(target, this);
 

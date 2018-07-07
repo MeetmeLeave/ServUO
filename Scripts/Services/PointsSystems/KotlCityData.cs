@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Server.Items;
 using Server.Mobiles;
 using Server.Commands;
+using Server.Engines.TreasuresOfKotlCity;
 
 namespace Server.Engines.Points
 {
@@ -42,7 +43,14 @@ namespace Server.Engines.Points
                     DungeonPoints[damager] = 0;
 
                 int fame = victim.Fame / 2;
-                DungeonPoints[damager] += (int)(fame * (1 + Math.Sqrt(((PlayerMobile)damager).RealLuck) / 100));
+                int luck = Math.Max(0, ((PlayerMobile)damager).RealLuck);
+
+                if (victim.Spawner is KotlBattleSimulator)
+                {
+                    fame *= 2;
+                }
+
+                DungeonPoints[damager] += (int)(fame * (1 + Math.Sqrt(luck) / 100));
 
                 int x = DungeonPoints[damager];
                 const double A = 0.000863316841;

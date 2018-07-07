@@ -15,6 +15,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
+using System.Linq;
 #endregion
 
 namespace Server
@@ -701,7 +702,7 @@ namespace Server
 			return (p1.m_X >= (p2.m_X - range)) && (p1.m_X <= (p2.m_X + range)) && (p1.m_Y >= (p2.m_Y - range)) &&
 				   (p1.m_Y <= (p2.m_Y + range));
 		}
-		/*
+
 		public static bool InUpdateRange(Point3D p1, Point3D p2)
 		{
             int range = Core.GlobalUpdateRange;
@@ -718,13 +719,6 @@ namespace Server
                    (p1.m_Y <= (p2.m_Y + range));
 		}
 
-		public static bool InUpdateRange(IPoint2D p1, IPoint2D p2)
-		{
-            int range = Core.GlobalUpdateRange;
-
-            return (p1.X >= (p2.X - range)) && (p1.X <= (p2.X + range)) && (p1.Y >= (p2.Y - range)) && (p1.Y <= (p2.Y + range));
-		}
-		*/
 		public static bool InUpdateRange(Mobile m, IPoint3D p)
 		{
 			return InUpdateRange(m, m, p);
@@ -1411,7 +1405,29 @@ namespace Server
 			}
 		}
 
+		public static string FormatDelegate(Delegate callback)
+		{
+			if (callback == null)
+			{
+				return "null";
+			}
+
+			if (callback.Method.DeclaringType == null)
+			{
+				return callback.Method.Name;
+			}
+
+			return String.Format("{0}.{1}", callback.Method.DeclaringType.FullName, callback.Method.Name);
+		}
+
 		private static readonly Stack<ConsoleColor> m_ConsoleColors = new Stack<ConsoleColor>();
+
+        public static void WriteConsoleColor(ConsoleColor color, string str)
+        {
+            PushColor(color);
+            Console.WriteLine(str);
+            PopColor();
+        }
 
 		public static void PushColor(ConsoleColor color)
 		{
@@ -1496,17 +1512,10 @@ namespace Server
 			}
 		}
 
-#if MONO
-		public static List<TOutput> CastConvertList<TInput, TOutput>( List<TInput> list ) where TInput : class where TOutput : class
-		{
-			return list.ConvertAll<TOutput>( new  Converter<TInput, TOutput>( delegate( TInput value ) { return value as TOutput; } ) );
-		}
-        #else
 		public static List<TOutput> CastConvertList<TInput, TOutput>(List<TInput> list) where TOutput : TInput
 		{
 			return list.ConvertAll(delegate(TInput value) { return (TOutput)value; });
 		}
-#endif
 
 		public static List<TOutput> SafeConvertList<TInput, TOutput>(List<TInput> list) where TOutput : class
 		{
@@ -1543,6 +1552,84 @@ namespace Server
         public static bool IsAlphaNumeric(String str)
         {
             return !Regex.IsMatch(str, "[^a-z0-9]", RegexOptions.IgnoreCase);
+        }
+    }
+
+    public static class ColUtility
+    {
+        public static void Free<T>(List<T> l)
+        {
+            if (l == null)
+                return;
+
+            l.Clear();
+            l.TrimExcess();
+        }
+
+        public static void ForEach<T>(IEnumerable<T> list, Action<T> action)
+        {
+            if (list == null || action == null)
+                return;
+
+            List<T> l = list.ToList();
+
+            foreach (T o in l)
+                action(o);
+
+            Free(l);
+        }
+
+        public static void ForEach<TKey, TValue>(
+            IDictionary<TKey, TValue> dictionary, Action<KeyValuePair<TKey, TValue>> action)
+        {
+            if (dictionary == null || dictionary.Count == 0 || action == null)
+                return;
+
+            List<KeyValuePair<TKey, TValue>> l = dictionary.ToList();
+
+            foreach (KeyValuePair<TKey, TValue> kvp in l)
+                action(kvp);
+
+            Free(l);
+        }
+
+        public static void ForEach<TKey, TValue>(IDictionary<TKey, TValue> dictionary, Action<TKey, TValue> action)
+        {
+            if (dictionary == null || dictionary.Count == 0 || action == null)
+                return;
+
+            List<KeyValuePair<TKey, TValue>> l = dictionary.ToList();
+
+            foreach (KeyValuePair<TKey, TValue> kvp in l)
+                action(kvp.Key, kvp.Value);
+
+            Free(l);
+        }
+
+        public static void For<T>(IEnumerable<T> list, Action<int, T> action)
+        {
+            if (list == null || action == null)
+                return;
+
+            List<T> l = list.ToList();
+
+            for (int i = 0; i < l.Count; i++)
+                action(i, l[i]);
+
+            Free(l);
+        }
+
+        public static void For<TKey, TValue>(IDictionary<TKey, TValue> list, Action<int, TKey, TValue> action)
+        {
+            if (list == null || action == null)
+                return;
+
+            List<KeyValuePair<TKey, TValue>> l = list.ToList();
+
+            for (int i = 0; i < l.Count; i++)
+                action(i, l[i].Key, l[i].Value);
+
+            Free(l);
         }
     }
 }

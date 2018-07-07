@@ -27,7 +27,7 @@ namespace Server.Misc
             m_PetStatGainDelay = Config.Get("PlayerCaps.PetStatTimeDelay", TimeSpan.FromMinutes(5.0));
             AntiMacroCode = Config.Get("PlayerCaps.EnableAntiMacro", !Core.ML);
             PlayerChanceToGainStats = Config.Get("PlayerCaps.PlayerChanceToGainStats", 5.0);
-            PetChanceToGainStats = Config.Get("PlayerCaps.PetChanceToGainStats", 5.0);
+            PetChanceToGainStats = PetTrainingHelper.Enabled ? 0.0 : Config.Get("PlayerCaps.PetChanceToGainStats", 5.0);
 
             if (!m_StatGainDelayEnabled)
                 m_StatGainDelay = TimeSpan.FromSeconds(0.5);
@@ -182,12 +182,6 @@ namespace Server.Misc
                 if (from.Alive && (gc >= Utility.RandomDouble() || skill.Base < 10.0 || CheckGGS(from, skill)))
                 {
                     Gain(from, skill);
-                    if (from.SkillsTotal >= 4500 || skill.Base >= 80.0)
-                    {
-                        Account acc = from.Account as Account;
-                        if (acc != null)
-                            acc.RemoveYoungStatus(1019036);
-                    }
                 }
             }
 
@@ -266,7 +260,7 @@ namespace Server.Misc
             if (from is BaseCreature && ((BaseCreature)from).IsDeadPet)
                 return;
 
-            if (skill.SkillName == SkillName.Focus && from is BaseCreature)
+            if (skill.SkillName == SkillName.Focus && from is BaseCreature && (!PetTrainingHelper.Enabled || !((BaseCreature)from).Controlled))
                 return;
 
             if (skill.Base < skill.Cap && skill.Lock == SkillLock.Up)
@@ -337,9 +331,9 @@ namespace Server.Misc
                     CheckReduceSkill((PlayerMobile)from, skills, toGain, skill);
                 }
 
-                if (!from.Player || (skills.Total + toGain) <= skills.Cap)
+                if (!from.Player || (skills.Total + toGain <= skills.Cap))
                 {
-                    skill.BaseFixedPoint += toGain;
+                    skill.BaseFixedPoint = Math.Min(skill.CapFixedPoint, skill.BaseFixedPoint + toGain);
 
                     if(from is PlayerMobile)
                         UpdateGGS(from, skill);

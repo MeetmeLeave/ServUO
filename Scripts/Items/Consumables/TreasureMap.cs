@@ -37,7 +37,7 @@ namespace Server.Items
 			new Type[]{ typeof( DreadSpider ), typeof( LichLord ), typeof( Daemon ), typeof( ElderGazer ), typeof( OgreLord ) },
 			new Type[]{ typeof( LichLord ), typeof( Daemon ), typeof( ElderGazer ), typeof( PoisonElemental ), typeof( BloodElemental ) },
 			new Type[]{ typeof( AncientWyrm ), typeof( Balron ), typeof( BloodElemental ), typeof( PoisonElemental ), typeof( Titan ) },
-            new Type[]{ typeof( BloodElemental), typeof(ColdDrake), typeof(FrostDragon), typeof(GreaterDragon), typeof(PoisonElemental)}
+            new Type[]{ typeof( BloodElemental), typeof(ColdDrake), typeof(FrostDragon), typeof(FrostDrake), typeof(GreaterDragon), typeof(PoisonElemental)}
 		};
 
         private static Type[][] m_TokunoSpawnTypes = new Type[][]
@@ -603,7 +603,7 @@ namespace Server.Items
 
                 try
                 {
-                    bc = (BaseCreature)Activator.CreateInstance(m_SpawnTypes[level][Utility.Random(spawns[level].Length)]);
+                    bc = (BaseCreature)Activator.CreateInstance(spawns[level][Utility.Random(spawns[level].Length)]);
                 }
                 catch
                 {
@@ -888,6 +888,7 @@ namespace Server.Items
             {
                 from.Send(
                     new MessageLocalizedAffix(
+                        from.NetState,
                         Serial,
                         ItemID,
                         MessageType.Label,

@@ -877,6 +877,7 @@ namespace Server.Multis
             }
 
             DesignContext.Add(m, this);
+
             m.Send(new BeginHouseCustomization(this));
 
             NetState ns = m.NetState;
@@ -992,9 +993,22 @@ namespace Server.Multis
             base.Deserialize(reader);
         }
 
-        public bool IsHiddenToCustomizer(Item item)
+        public bool IsHiddenToCustomizer(Mobile m, Item item)
         {
-            return (item == m_Signpost || item == m_SignHanger || item == Sign || IsFixture(item));
+            // Always visible if *this* house, equipped, or contained.
+            if (item == this || item.Parent != null)
+                return false;
+
+            // Always hidden if uneditable fixture.
+            if (item == Signpost || item == SignHanger || item == Sign || IsFixture(item))
+                return true;
+
+            // Always hidden if *not* contained within *this* house region.
+            // Note: Will hide other houses and their contents.
+            if (Region != null && !Region.Contains(item.Location))
+                return true;
+
+            return false;
         }
 
         public static void Initialize()
@@ -1903,16 +1917,21 @@ namespace Server.Multis
 
             HouseFoundation foundation = World.FindItem(pvSrc.ReadInt32()) as HouseFoundation;
 
-            if (foundation != null && from.Map == foundation.Map && from.InRange(foundation.GetWorldLocation(), 24) && from.CanSee(foundation))
+            if (foundation != null && from.Map == foundation.Map)
             {
-                DesignState stateToSend;
+                var range = foundation.GetUpdateRange(from);
 
-                if (context != null && context.Foundation == foundation)
-                    stateToSend = foundation.DesignState;
-                else
-                    stateToSend = foundation.CurrentState;
+                if (Utility.InRange(from.Location, foundation.GetWorldLocation(), range) && from.CanSee(foundation))
+                {
+                    DesignState stateToSend;
 
-                stateToSend.SendDetailedInfoTo(state);
+                    if (context != null && context.Foundation == foundation)
+                        stateToSend = foundation.DesignState;
+                    else
+                        stateToSend = foundation.CurrentState;
+
+                    stateToSend.SendDetailedInfoTo(state);
+                }
             }
         }
 
@@ -2412,23 +2431,8 @@ namespace Server.Multis
             if (state == null)
                 return;
 
-            List<Item> fixtures = foundation.Fixtures;
-
-            for (int i = 0; fixtures != null && i < fixtures.Count; ++i)
-            {
-                Item item = fixtures[i];
-
-                state.Send(item.RemovePacket);
-            }
-
-            if (foundation.Signpost != null)
-                state.Send(foundation.Signpost.RemovePacket);
-
-            if (foundation.SignHanger != null)
-                state.Send(foundation.SignHanger.RemovePacket);
-
-            if (foundation.Sign != null)
-                state.Send(foundation.Sign.RemovePacket);
+            from.ClearScreen();
+            from.SendEverything();
         }
 
         public static void Remove(Mobile from)
@@ -2453,23 +2457,8 @@ namespace Server.Multis
             if (state == null)
                 return;
 
-            List<Item> fixtures = context.Foundation.Fixtures;
-
-            for (int i = 0; fixtures != null && i < fixtures.Count; ++i)
-            {
-                Item item = fixtures[i];
-
-                item.SendInfoTo(state);
-            }
-
-            if (context.Foundation.Signpost != null)
-                context.Foundation.Signpost.SendInfoTo(state);
-
-            if (context.Foundation.SignHanger != null)
-                context.Foundation.SignHanger.SendInfoTo(state);
-
-            if (context.Foundation.Sign != null)
-                context.Foundation.Sign.SendInfoTo(state);
+            from.ClearScreen();
+            from.SendEverything();
         }
     }
 

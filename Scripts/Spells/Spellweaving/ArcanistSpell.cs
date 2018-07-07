@@ -35,6 +35,11 @@ namespace Server.Spells.Spellweaving
 
 			if (focus == null || focus.Deleted)
 			{
+                if (Core.TOL && from is BaseCreature && from.Skills[SkillName.Spellweaving].Value > 0)
+                {
+                    return (int)Math.Max(1, Math.Min(6, from.Skills[SkillName.Spellweaving].Value / 20));
+                }
+
 				return 0;
 			}
 
@@ -157,7 +162,8 @@ namespace Server.Spells.Spellweaving
 
 		public override void SendCastEffect()
 		{
-			Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 4, 3);
+            if(Caster.Player)
+			    Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 4, 3);
 		}
 
 		public virtual bool CheckResisted(Mobile m)

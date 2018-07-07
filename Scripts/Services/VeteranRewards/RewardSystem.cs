@@ -110,15 +110,17 @@ namespace Server.Engines.VeteranRewards
         public static int GetRewardLevel(Account acct)
         {
             TimeSpan totalTime = (DateTime.UtcNow - acct.Created);
+            TimeSpan ositotalTime = (DateTime.UtcNow - new DateTime(1997, 9, 24));
 
             int level = (int)(totalTime.TotalDays / RewardInterval.TotalDays);
+            int levelosi = (int)(ositotalTime.TotalDays / 365);
 
             if (level < 0)
                 level = 0;
 
             level += StartingLevel;
 
-            return level;
+            return Math.Min(level, levelosi);
         }
 
         public static bool HasHalfLevel(Mobile mob)
@@ -442,7 +444,6 @@ namespace Server.Engines.VeteranRewards
                     new RewardEntry(monsterStatues, 1155748, typeof(MonsterStatuette), MonsterStatuetteType.DarkFather),
                     new RewardEntry(monsterStatues, 1157079, typeof(MonsterStatuette), Expansion.TOL, MonsterStatuetteType.Zipactriotal),
 
-                    new RewardEntry(etherealSteeds, 1006019, typeof(EtherealHorse)),
                     new RewardEntry(etherealSteeds, 1006051, typeof(EtherealLlama)),
                     new RewardEntry(etherealSteeds, 1006050, typeof(EtherealOstard)),
 
@@ -569,8 +570,6 @@ namespace Server.Engines.VeteranRewards
                     new RewardEntry(houseAddOns,    1150121, typeof(RoseRugAddonDeed), Expansion.SA),
                     new RewardEntry(houseAddOns,    1150122, typeof(DolphinRugAddonDeed), Expansion.SA),
                     new RewardEntry(houseAddOns,    1157996, typeof(KoiPondDeed), Expansion.TOL),
-
-                    new RewardEntry( miscellaneous, 1150424, typeof(ChestOfSending), Expansion.SA),
                 }),
                 new RewardList(RewardInterval, 11, new RewardEntry[]
                 {
@@ -664,8 +663,7 @@ namespace Server.Engines.VeteranRewards
 
             if (Core.ML && e.Mobile is PlayerMobile && !((PlayerMobile)e.Mobile).HasStatReward && HasHalfLevel(e.Mobile))
             {
-                ((PlayerMobile)e.Mobile).HasStatReward = true;
-                e.Mobile.StatCap += 5;
+                Server.Gumps.BaseGump.SendGump(new StatRewardGump((PlayerMobile)e.Mobile));
             }
 
             if (cur < max)

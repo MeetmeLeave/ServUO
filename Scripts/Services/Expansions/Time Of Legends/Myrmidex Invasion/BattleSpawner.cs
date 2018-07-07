@@ -348,7 +348,7 @@ namespace Server.Engines.MyrmidexInvasion
                     {
                         for (int j = 0; j < 20; j++)
                         {
-                            Point3D p = _MyrmidexSpawnZone.GetRandomSpawnPoint(Map.TerMur);
+                            Point3D p = Map.TerMur.GetRandomSpawnPoint(_MyrmidexSpawnZone);
 
                             if (Map.TerMur.CanSpawnMobile(p.X, p.Y, p.Z))
                             {
@@ -389,7 +389,7 @@ namespace Server.Engines.MyrmidexInvasion
                     {
                         for (int j = 0; j < 20; j++)
                         {
-                            Point3D p = _TribeSpawnZone.GetRandomSpawnPoint(Map.TerMur);
+                            Point3D p = Map.TerMur.GetRandomSpawnPoint(_TribeSpawnZone);
 
                             if (Map.TerMur.CanSpawnMobile(p.X, p.Y, p.Z))
                             {
@@ -427,7 +427,7 @@ namespace Server.Engines.MyrmidexInvasion
 
                 foreach (Mobile m in eable)
                 {
-                    if (m != killer && IsSameLeg(bc, m) && MyrmidexInvasionSystem.IsEnemies(bc, m))
+                    if (m != killer && IsSameLeg(bc, m) && MyrmidexInvasionSystem.AreEnemies(bc, m))
                     {
                         eable.Free();
                         return true;
@@ -512,7 +512,7 @@ namespace Server.Engines.MyrmidexInvasion
         {
             List<DamageStore> rights = bc.GetLootingRights();
 
-            ColUtility.ForEach(rights.Where(ds => ds.m_Mobile is PlayerMobile && ds.m_HasRight && MyrmidexInvasionSystem.IsEnemies(ds.m_Mobile, bc)), ds =>
+            ColUtility.ForEach(rights.Where(ds => ds.m_Mobile is PlayerMobile && ds.m_HasRight && MyrmidexInvasionSystem.AreEnemies(ds.m_Mobile, bc)), ds =>
             {
                 if (MyrmidexInvasionSystem.IsAlliedWith(bc, Allegiance.Myrmidex))
                 {

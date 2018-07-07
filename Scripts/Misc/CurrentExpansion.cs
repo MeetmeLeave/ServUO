@@ -15,7 +15,7 @@ namespace Server
 {
 	public class CurrentExpansion
 	{
-		public static readonly Expansion Expansion = Config.GetEnum<Expansion>("Expansion.CurrentExpansion", Expansion.TOL);
+		public static readonly Expansion Expansion = Config.GetEnum("Expansion.CurrentExpansion", Expansion.EJ);
 
 		[CallPriority(Int32.MinValue)]
 		public static void Configure()
@@ -46,7 +46,7 @@ namespace Server
 				PacketHandlers.SingleClickProps = true; // single click for everything is overriden to check object property list
 			}
 
-			Mobile.ActionDelay = 1000;
+			Mobile.ActionDelay = Core.TOL ? 500 : Core.AOS ? 1000 : 500;
 			Mobile.AOSStatusHandler = AOS.GetStatus;
 		}
 	}

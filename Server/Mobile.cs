@@ -2162,6 +2162,11 @@ namespace Server
 		{
 			if (CheckAttack(e))
 			{
+                if (!m_Warmode)
+                {
+                    Warmode = true;
+                }
+
 				Combatant = e;
 			}
 		}
@@ -2193,7 +2198,7 @@ namespace Server
 					++m_ChangingCombatant;
 					m_Combatant = value;
 
-					if ((m_Combatant != null && !CanBeHarmful(m_Combatant, false)) || !Region.OnCombatantChange(this, old, m_Combatant))
+					if (!Region.OnCombatantChange(this, old, m_Combatant) || (m_Combatant != null && !CanBeHarmful(m_Combatant, false)))
 					{
 						m_Combatant = old;
 						--m_ChangingCombatant;
@@ -4103,7 +4108,9 @@ namespace Server
 
 					DeathMoveResult res = GetInventoryMoveResultFor(item);
 
-					if (res == DeathMoveResult.MoveToCorpse)
+                    pack.FreePosition(item.GridLocation);
+
+                    if (res == DeathMoveResult.MoveToCorpse)
 					{
 						content.Add(item);
 					}
@@ -4244,7 +4251,7 @@ namespace Server
 				Stam = 0;
 				Mana = 0;
 
-				EventSink.InvokePlayerDeath(new PlayerDeathEventArgs(this));
+				EventSink.InvokePlayerDeath(new PlayerDeathEventArgs(this, LastKiller, c));
 
 				ProcessDeltaQueue();
 
@@ -5503,6 +5510,10 @@ namespace Server
 		public virtual void OnDamage(int amount, Mobile from, bool willKill)
 		{ }
 
+        public virtual void Damage(int amount, Mobile from, int type)
+        {
+        }
+
 		public virtual void Damage(int amount)
 		{
 			Damage(amount, null);
@@ -5557,80 +5568,7 @@ namespace Server
 
 				Paralyzed = false;
 
-				switch (m_VisibleDamageType)
-				{
-					case VisibleDamageType.Related:
-						{
-							NetState ourState = m_NetState, theirState = (from == null ? null : from.m_NetState);
-
-							if (ourState == null)
-							{
-								Mobile master = GetDamageMaster(from);
-
-								if (master != null)
-								{
-									ourState = master.m_NetState;
-								}
-							}
-
-							if (theirState == null && from != null)
-							{
-								Mobile master = from.GetDamageMaster(this);
-
-								if (master != null)
-								{
-									theirState = master.m_NetState;
-								}
-							}
-
-							if (amount > 0 && (ourState != null || theirState != null))
-							{
-								Packet p = null; // = new DamagePacket( this, amount );
-
-								if (ourState != null)
-								{
-									if (ourState.DamagePacket)
-									{
-										p = Packet.Acquire(new DamagePacket(this, amount));
-									}
-									else
-									{
-										p = Packet.Acquire(new DamagePacketOld(this, amount));
-									}
-
-									ourState.Send(p);
-								}
-
-								if (theirState != null && theirState != ourState)
-								{
-									bool newPacket = theirState.DamagePacket;
-
-									if (newPacket && (p == null || !(p is DamagePacket)))
-									{
-										Packet.Release(p);
-										p = Packet.Acquire(new DamagePacket(this, amount));
-									}
-									else if (!newPacket && (p == null || !(p is DamagePacketOld)))
-									{
-										Packet.Release(p);
-										p = Packet.Acquire(new DamagePacketOld(this, amount));
-									}
-
-									theirState.Send(p);
-								}
-
-								Packet.Release(p);
-							}
-
-							break;
-						}
-					case VisibleDamageType.Everyone:
-						{
-							SendDamageToAll(amount);
-							break;
-						}
-				}
-
+                SendDamagePacket(from, amount);
 				OnDamage(amount, from, newHits < 0);
 
 				IMount m = Mount;
@@ -5656,6 +5594,83 @@ namespace Server
 				}
 			}
 		}
+
+        public virtual void SendDamagePacket(Mobile from, int amount)
+        {
+            switch (m_VisibleDamageType)
+            {
+                case VisibleDamageType.Related:
+                    {
+                        NetState ourState = m_NetState, theirState = (from == null ? null : from.m_NetState);
+
+                        if (ourState == null)
+                        {
+                            Mobile master = GetDamageMaster(from);
+
+                            if (master != null)
+                            {
+                                ourState = master.m_NetState;
+                            }
+                        }
+
+                        if (theirState == null && from != null)
+                        {
+                            Mobile master = from.GetDamageMaster(this);
+
+                            if (master != null)
+                            {
+                                theirState = master.m_NetState;
+                            }
+                        }
+
+                        if (amount > 0 && (ourState != null || theirState != null))
+                        {
+                            Packet p = null; // = new DamagePacket( this, amount );
+
+                            if (ourState != null)
+                            {
+                                if (ourState.DamagePacket)
+                                {
+                                    p = Packet.Acquire(new DamagePacket(this, amount));
+                                }
+                                else
+                                {
+                                    p = Packet.Acquire(new DamagePacketOld(this, amount));
+                                }
+
+                                ourState.Send(p);
+                            }
+
+                            if (theirState != null && theirState != ourState)
+                            {
+                                bool newPacket = theirState.DamagePacket;
+
+                                if (newPacket && (p == null || !(p is DamagePacket)))
+                                {
+                                    Packet.Release(p);
+                                    p = Packet.Acquire(new DamagePacket(this, amount));
+                                }
+                                else if (!newPacket && (p == null || !(p is DamagePacketOld)))
+                                {
+                                    Packet.Release(p);
+                                    p = Packet.Acquire(new DamagePacketOld(this, amount));
+                                }
+
+                                theirState.Send(p);
+                            }
+
+                            Packet.Release(p);
+                        }
+
+                        break;
+                    }
+                case VisibleDamageType.Everyone:
+                    {
+                        SendDamageToAll(amount);
+                        break;
+                    }
+            }
+        }
 
 		public virtual void SendDamageToAll(int amount)
 		{
@@ -5742,6 +5757,7 @@ namespace Server
 			{
 				m_NetState.Send(
 					new MessageLocalizedAffix(
+                        m_NetState,
 						Serial.MinusOne,
 						-1,
 						MessageType.Label,
@@ -6655,7 +6671,7 @@ namespace Server
 
 		public virtual int MaxWeight { get { return int.MaxValue; } }
 
-		public virtual void AddItem(Item item)
+		public void AddItem(Item item)
 		{
 			if (item == null || item.Deleted)
 			{
@@ -6678,6 +6694,29 @@ namespace Server
 			{
 				item.SendRemovePacket();
 			}
+
+            var equipped = FindItemOnLayer(item.Layer);
+
+            if (equipped != null && equipped != item)
+            {
+                try
+                {
+                    using (StreamWriter op = new StreamWriter("LayerConflict.log", true))
+                    {
+                        op.WriteLine("# {0}", DateTime.UtcNow);
+                        op.WriteLine("Offending Mobile: {0}[{1}]", GetType().ToString(), this);
+                        op.WriteLine("Offending Item: {0}", item.GetType().ToString());
+                        op.WriteLine("Layer: {0}", item.Layer.ToString());
+                        op.WriteLine();
+                    }
+
+                    Utility.WriteConsoleColor(ConsoleColor.DarkRed, String.Format("Offending Mobile: {0}[{1}]", GetType().ToString(), this));
+                    Utility.WriteConsoleColor(ConsoleColor.DarkRed, String.Format("Offending Item: {0}", item.GetType().ToString()));
+                    Utility.WriteConsoleColor(ConsoleColor.DarkRed, String.Format("Layer: {0}", item.Layer.ToString()));
+                }
+                catch
+                { }
+            }
 
 			item.Parent = this;
 			item.Map = m_Map;
@@ -7065,6 +7104,41 @@ namespace Server
 		{
 			to.Send(new MessageLocalized(m_Serial, Body, MessageType.Regular, m_SpeechHue, 3, number, Name, args));
 		}
+
+        public void SayTo(Mobile to, int number, int hue)
+        {
+            PrivateOverheadMessage(MessageType.Regular, hue, number, to.NetState);
+        }
+
+        public void SayTo(Mobile to, int number, string args, int hue)
+        {
+            PrivateOverheadMessage(MessageType.Regular, hue, number, args, to.NetState);
+        }
+
+        public void SayTo(Mobile to, int hue, string text, string args)
+        {
+            SayTo(to, text, args, hue, false);
+        }
+
+        public void SayTo(Mobile to, int hue, string text, string args, bool ascii)
+        {
+            PrivateOverheadMessage(MessageType.Regular, hue, ascii, String.Format(text, args), to.NetState);
+        }
+
+        public void Say(int number, int hue)
+        {
+            PublicOverheadMessage(MessageType.Regular, hue, number);
+        }
+
+        public void Say(int number, string args, int hue)
+        {
+            PublicOverheadMessage(MessageType.Regular, hue, number, args);
+        }
+
+        public void Say(string text, int hue, bool ascii = false)
+        {
+            PublicOverheadMessage(MessageType.Regular, hue, ascii, text);
+        }
 
 		public void Say(bool ascii, string text)
 		{
@@ -7470,7 +7544,7 @@ namespace Server
 
 			if (m_Map != null && ns != null)
 			{
-				var eable = m_Map.GetObjectsInRange(m_Location, ns.UpdateRange);
+				var eable = m_Map.GetObjectsInRange(m_Location);
 
 				foreach (var o in eable)
 				{
@@ -7487,7 +7561,7 @@ namespace Server
 					{
 						Mobile m = (Mobile)o;
 
-						if (CanSee(m))
+						if (Utility.InUpdateRange(this, m) && CanSee(m))
 						{
 							ns.Send(MobileIncoming.Create(ns, this, m));
 
@@ -8761,6 +8835,11 @@ namespace Server
 						}
 					}
 
+                    if (Core.SA)
+                    {
+                        NextActionTime = Core.TickCount + Mobile.ActionDelay;
+                    }
+
 					OnWarmodeChanged();
 				}
 			}
@@ -8845,7 +8924,7 @@ namespace Server
 		public virtual void OnNetStateChanged()
 		{ }
 
-		[CommandProperty(AccessLevel.GameMaster, AccessLevel.Owner)]
+		[CommandProperty(AccessLevel.GameMaster, AccessLevel.Administrator)]
 		public NetState NetState
 		{
 			get
@@ -11778,8 +11857,8 @@ namespace Server
 		{
 			if (m_Map != null)
 			{
-				Packet p =
-					Packet.Acquire(new MessageLocalizedAffix(m_Serial, Body, type, hue, 3, number, Name, affixType, affix, args));
+                Packet cp = null;
+                Packet ep = null;
 
 				var eable = m_Map.GetClientsInRange(m_Location);
 
@@ -11787,11 +11866,29 @@ namespace Server
 				{
 					if (state.Mobile.CanSee(this) && (noLineOfSight || state.Mobile.InLOS(this)))
 					{
-						state.Send(p);
+                        if (state.IsEnhancedClient)
+                        {
+                            if (ep == null)
+                            {
+                                ep = Packet.Acquire(new MessageLocalizedAffix(state, m_Serial, Body, type, hue, 3, number, Name, affixType, affix, args));
+                            }
+
+                            state.Send(ep);
+                        }
+                        else
+                        {
+                            if (cp == null)
+                            {
+                                cp = Packet.Acquire(new MessageLocalizedAffix(m_Serial, Body, type, hue, 3, number, Name, affixType, affix, args));
+                            }
+
+                            state.Send(cp);
+                        }
 					}
 				}
 
-				Packet.Release(p);
+				Packet.Release(ep);
+                Packet.Release(cp);
 
 				eable.Free();
 			}
@@ -11818,6 +11915,11 @@ namespace Server
 		{
 			PrivateOverheadMessage(type, hue, number, "", state);
 		}
+
+        public void PrivateOverheadMessage(MessageType type, int hue, int number, AffixType affixType, string affix, string args, NetState state)
+        {
+            Send(new MessageLocalizedAffix(m_NetState, Serial, Body, type, hue, 3, number, Name, affixType, affix, args));
+        }
 
 		public void PrivateOverheadMessage(MessageType type, int hue, int number, string args, NetState state)
 		{
@@ -11978,6 +12080,7 @@ namespace Server
 			{
 				ns.Send(
 					new MessageLocalizedAffix(
+                        ns,
 						Serial.MinusOne,
 						-1,
 						MessageType.Regular,

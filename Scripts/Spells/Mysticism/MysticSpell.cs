@@ -33,13 +33,6 @@ namespace Server.Spells.Mysticism
             max = avg + ChanceOffset;
         }
 
-        public override bool CheckFizzle()
-        {
-            double minSkill, maxSkill;
-            GetCastSkills(out minSkill, out maxSkill);
-            return Caster.CheckSkill(CastSkill, minSkill, maxSkill);
-        }
-
         public override SkillName CastSkill { get { return SkillName.Mysticism; } }
 
         public override SkillName DamageSkill
@@ -54,7 +47,8 @@ namespace Server.Spells.Mysticism
 
         public override void SendCastEffect()
         {
-            Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 0x66C, 3);
+            if(Caster.Player)
+                Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 0x66C, 3);
         }
 
         public override int GetMana()
@@ -132,52 +126,6 @@ namespace Server.Spells.Mysticism
         public static double GetBoostSkill(Mobile m)
         {
             return Math.Max(m.Skills[SkillName.Imbuing].Value, m.Skills[SkillName.Focus].Value);
-        }
-
-        public virtual void OnTarget(Object o)
-        {
-        }
-
-        // Ever wondered why in the hell RunUO coded a new target class for every spell?
-        public class MysticSpellTarget : Target
-        {
-            private MysticSpell m_Owner;
-
-            public MysticSpell Owner
-            {
-                get { return m_Owner; }
-                set { m_Owner = value; }
-            }
-
-            public MysticSpellTarget(MysticSpell owner, TargetFlags flags)
-                : this(owner, false, flags)
-            {
-            }
-
-            public MysticSpellTarget(MysticSpell owner, bool allowland, TargetFlags flags)
-                : base(12, allowland, flags)
-            {
-                m_Owner = owner;
-            }
-
-            protected override void OnTarget(Mobile from, object o)
-            {
-                if (o == null)
-                    return;
-
-                if (!from.CanSee(o))
-                    from.SendLocalizedMessage(500237); // Target can not be seen.
-                else
-                {
-                    SpellHelper.Turn(from, o);
-                    m_Owner.OnTarget(o);
-                }
-            }
-
-            protected override void OnTargetFinish(Mobile from)
-            {
-                m_Owner.FinishSequence();
-            }
         }
     }
 }

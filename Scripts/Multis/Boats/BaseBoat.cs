@@ -173,27 +173,27 @@ namespace Server.Multis
                 if (!m_Decay)
                     return 1043010; // This structure is like new.
 
-                if(m_DecayTime <= DateTime.UtcNow)
+                if (m_DecayTime <= DateTime.UtcNow)
                     return 1043015; // This structure is in danger of collapsing.
 
                 TimeSpan decaySpan = m_DecayTime - DateTime.UtcNow;
 
-                if(decaySpan > TimeSpan.FromDays(6.0))
+                if (decaySpan >= TimeSpan.FromDays(13.0))
                     return 1043010; // This structure is like new.
 
-                if(decaySpan > TimeSpan.FromDays(5.0))
+                if (decaySpan >= TimeSpan.FromDays(10.0))
                     return 1043011; // This structure is slightly worn.
 
-                if(decaySpan > TimeSpan.FromDays(4.0))
+                if (decaySpan >= TimeSpan.FromDays(7.0))
                     return 1043012; // This structure is somewhat worn.
 
-                if(decaySpan > TimeSpan.FromDays(3.0))
+                if (decaySpan >= TimeSpan.FromDays(4.0))
                     return 1043013; // This structure is fairly worn.
 
-                 if(decaySpan > TimeSpan.FromDays(1.5))
-                     return 1043014; // This structure is greatly worn.
+                if (decaySpan >= TimeSpan.FromDays(1.0))
+                    return 1043014; // This structure is greatly worn.
 
-                 return 1043015; // This structure is in danger of collapsing.*/
+                return 1043015; // This structure is in danger of collapsing.*/
             }
         }
 
@@ -212,7 +212,7 @@ namespace Server.Multis
         public virtual bool IsClassicBoat { get { return true; } }
         public virtual double TurnDelay { get { return 0.5; } }
         public virtual bool Scuttled { get { return false; } }
-        public virtual TimeSpan BoatDecayDelay { get { return TimeSpan.FromDays(9); } }
+        public virtual TimeSpan BoatDecayDelay { get { return TimeSpan.FromDays(13); } }
         public virtual bool CanLinkToLighthouse { get { return true; } }
 
         #region IMount Members
@@ -295,7 +295,7 @@ namespace Server.Multis
 
             if (m_TillerMan != null)
             {
-                if (m_TillerMan is Item)
+                if (m_TillerMan is TillerMan)
                 {
                     TillerMan tillerman = (TillerMan)m_TillerMan;
                     tillerman.Location = new Point3D(X + (xOffset * TillerManDistance) + (m_Facing == Direction.North ? 1 : 0), Y + (yOffset * TillerManDistance), tillerman.Z);
@@ -607,7 +607,9 @@ namespace Server.Multis
 
         public virtual bool IsOwner(Mobile from)
         {
-            if (from.AccessLevel > AccessLevel.Player || (from != null && from == m_Owner))
+            if (from == null)
+                return false;
+            if (from.AccessLevel > AccessLevel.Player || from == m_Owner)
                 return true;
 
             if (m_Owner == null)
@@ -746,7 +748,7 @@ namespace Server.Multis
             if (from.AccessLevel < AccessLevel.GameMaster && from != m_Owner)
             {
                 if (m_TillerMan != null)
-                    TillerManSay(Utility.Random(1042876, 4)); // Arr, don't do that! | Arr, leave me alone! | Arr, watch what thour'rt doing, matey! | Arr! Do that again and I’ll throw ye overhead!
+                    TillerManSay(Utility.Random(1042876, 4)); // Arr, don't do that! | Arr, leave me alone! | Arr, watch what thour'rt doing, matey! | Arr! Do that again and Iâ€™ll throw ye overhead!
 
                 return;
             }
@@ -2182,12 +2184,7 @@ namespace Server.Multis
 
         public int PlayerCount()
         {
-            int count = 0;
-
-            foreach (var m in GetMobilesOnBoard())
-                count++;
-
-            return count;
+            return GetMobilesOnBoard().Where(m => m is PlayerMobile).Count();
         }
 
         public void TillerManSay(object message)
