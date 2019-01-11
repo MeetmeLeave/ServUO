@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - Teleporter.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -648,7 +642,7 @@ namespace Server.Items
             {
                 Mobile m = e.Mobile;
 
-                if (!m.InRange(GetWorldLocation(), m_Range))
+                if (!m.InRange(GetWorldLocation(), m_Range) || Server.Engines.CityLoyalty.CityTradeSystem.HasTrade(m))
                 {
                     return;
                 }

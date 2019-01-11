@@ -238,6 +238,13 @@
         <rect x="6528" y="504" width="4" height="1" />
         <zrange min="-50" />
       </region>
+      <region type="TheLostCityEntry">
+		    <rect x="6316" y="472" width="8" height="8" />
+        <rect x="6303" y="509" width="11" height="7" />
+	    </region>
+      <region type="ParoxysmusBossEntry">
+				<rect x="6516" y="493" width="5" height="7" />
+			</region>
     </region>
     <region priority="50" name="Huntsman's Forest">
       <rect x="1595" y="550" width="120" height="120" />
@@ -1230,6 +1237,13 @@
         <rect x="6528" y="504" width="4" height="1" />
         <zrange min="-50" />
       </region>
+      <region type="TheLostCityEntry">
+		    <rect x="6316" y="472" width="8" height="8" />
+        <rect x="6303" y="509" width="11" height="7" />
+	    </region>
+      <region type="ParoxysmusBossEntry">
+				<rect x="6516" y="493" width="5" height="7" />
+			</region>
     </region>
     <region priority="50" name="Bravehorn's drinking pool">
       <rect x="1302" y="2331" width="38" height="22" />
@@ -2007,7 +2021,7 @@
       </spawning>
     </region>
     <region type="NoHousingRegion" priority="50" name="FireIsleCasino">
-      <rect x="4041" y="3364" width="60" height="64" />
+      <rect x="4038" y="3303" width="60" height="64" />
       <go x="4047" y="3371" z="0" />
     </region>
     <region priority="50" name="Shrine of Compassion">
@@ -2405,10 +2419,14 @@
     </region>
   </Facet>
   <Facet name="Malas">
-    <region type="Underwater" priority="50" name="Gravewater Lake">
+    <region type="Underwater" priority="50" name="Gravewater Lake [Underwater]">
       <rect x="1698" y="1567" width="5" height="60" />
       <rect x="1687" y="1627" width="26" height="26" />
     </region>
+	<region priority="50" name="Gravewater Lake">
+			<rect x="1440" y="1527" width="423" height="219" />
+			<rect x="1381" y="1565" width="215" height="224" />
+	</region>
     <region type="MondainRegion" priority="50" name="Gravewater Dock">
       <rect x="1692" y="1551" width="16" height="16" />
     </region>
@@ -2787,11 +2805,16 @@
       <rect x="624" y="3296" width="303" height="287" />
       <go x="750" y="3440" z="-20" />
       <music name="RoyalCity" />
-      <region name="Queen's Palace">
-        <rect x="717" y="3339" width="68" height="73" />
-        <go x="748" y="3357" z="55" />
-        <music name="QueenPalace" />
-      </region>
+		<region name="Queen's Palace">
+		  <rect x="717" y="3339" width="68" height="73" />
+		  <go x="748" y="3357" z="55" />
+		  <music name="QueenPalace" />
+		</region>
+		<region name="Royal City Inn">
+            <rect x="724" y="3463" width="37" height="20" />
+            <rect x="747" y="3480" width="13" height="13" />
+            <logoutDelay active="false" />
+        </region>
     </region>
     <region type="DungeonRegion" priority="50" name="Royal Park">
       <rect x="632" y="3233" width="176" height="35" />

@@ -70,7 +70,7 @@ namespace Server.Commands
 			new CommandEntry("Decorations",         "Decorate",         "DecorateDelete",		Category.Decoration,      Expansion.None,   113),
 			new CommandEntry("ML Decorations",      "DecorateML",		"DecorateMLDelete",		Category.Decoration,      Expansion.ML,     114),
 			new CommandEntry("SA Decorations",      "DecorateSA",		"DecorateSADelete",		Category.Decoration,      Expansion.SA,     115),
-			new CommandEntry("Spawners",		    "XmlLoad Spawns",	"XmlSpawnerWipeAll",	Category.Spawn,           Expansion.None,   116),
+			new CommandEntry("Spawners",		    "XmlLoad Spawns",	"WipeAllXmlSpawners",	Category.Spawn,           Expansion.None,   116),
             new CommandEntry("New Despise",         "SetupDespise",     "DeleteDespise",        Category.RevampedDungeon, Expansion.SA,     117),
             new CommandEntry("New Covetous",        "SetupNewCovetous", "DeleteCovetous",       Category.RevampedDungeon, Expansion.SA,     118),
             new CommandEntry("New Shame",           "GenerateNewShame", "DeleteShame",          Category.RevampedDungeon, Expansion.SA,     119),
@@ -82,6 +82,7 @@ namespace Server.Commands
             new CommandEntry("New Wrong",           "GenWrongRevamp",               null,       Category.RevampedDungeon, Expansion.SA,     125),
             new CommandEntry("Kotl City",           "GenerateTreasuresOfKotlCity",  null,       Category.System,          Expansion.TOL,    126),
             new CommandEntry("Fillable Containers", "CheckFillables",               null,       Category.Spawn,           Expansion.None,   127, 5),
+            new CommandEntry("Champ Spawns",        "GenChampSpawns",   "DelChampSpawns",       Category.Spawn,           Expansion.UOR,    128),
 		});
 
         public static bool WorldCreating { get; set; }
@@ -312,7 +313,7 @@ namespace Server.Gumps
             if (!Server.Factions.Settings.Enabled)
                 items--;
 
-			AddBackground(0, 0, 240, 75 + items * 25, 5054);
+			AddBackground(0, 0, 280, 75 + items * 25, 5054);
 			switch (m_Type)
 			{
 				case CreateWorld.GumpType.Create:
@@ -379,13 +380,13 @@ namespace Server.Gumps
 
         public override void AddGumpLayout()
         {
-            AddBackground(0, 0, 600, 500, 5054);
+            AddBackground(0, 0, 640, 500, 5054);
 
             AddImageTiled(10, 10, 140, 28, 3004);
-            AddImageTiled(152, 10, 438, 28, 3004);
+            AddImageTiled(152, 10, 478, 28, 3004);
 
             AddImageTiled(10, 40, 140, 430, 3004);
-            AddImageTiled(152, 40, 438, 430, 3004);
+            AddImageTiled(152, 40, 478, 430, 3004);
 
             string label = GumpType == CreateWorld.GumpType.Create ? "CREATE WORLD GUMP" : "DELETE WORLD GUMP";
             switch (GumpType)
@@ -440,14 +441,15 @@ namespace Server.Gumps
                 }
                 else
                 {
-                    AddLabel(x + 21, y, created ? 200 : 338, String.Format("{0} {1}", entry.Name, "[Wrong Expansion]"));
+                    AddLabel(x + 21, y, created ? 200 : 33, String.Format("{0} {1}", entry.Name, "[Wrong Expansion]"));
+                    AddImage(x, y - 2, 210);
                 }
 
                 y += 20;
 
                 if (i == perpage)
                 {
-                    x = 380;
+                    x = 382;
                     y = 55;
                 }
             }
@@ -458,8 +460,8 @@ namespace Server.Gumps
             AddButton(154, 448, 4017, 4019, 2501, GumpButtonType.Reply, 0);
             AddHtml(187, 448, 150, 20, Color("#696969", "Uncheck All"), false, false);
 
-            AddButton(240, 473, 247, 249, 1, GumpButtonType.Reply, 0);
-            AddButton(303, 473, 241, 243, 0, GumpButtonType.Reply, 0);
+            AddButton(260, 473, 247, 249, 1, GumpButtonType.Reply, 0);
+            AddButton(323, 473, 241, 243, 0, GumpButtonType.Reply, 0);
         }
 
         public override void OnResponse(RelayInfo info)
@@ -554,6 +556,8 @@ namespace Server.Gumps
                     return BedrollSpawner.Instances != null && BedrollSpawner.Instances.Count > 0;
                 case 126:
                     return Server.Engines.TreasuresOfKotlCity.KotlBattleSimulator.Instance != null;
+                case 128:
+                    return Server.Engines.CannedEvil.ChampionSystem.AllSpawns.Count > 0;
             }
 
             return false;
@@ -604,7 +608,7 @@ namespace Server.Gumps
                 FilePath,
                 writer =>
                 {
-                    writer.Write(0);
+                    writer.Write(1);
                     writer.Write(true);
 
                     writer.Write(CreateTable.Count);
@@ -631,6 +635,11 @@ namespace Server.Gumps
                     for (int i = 0; i < count; i++)
                     {
                         CreateTable[reader.ReadInt()] = reader.ReadBool();
+                    }
+
+                    if (version == 0)
+                    {
+                        CreateTable[128] = HasGenerated(128);
                     }
                 });
         }

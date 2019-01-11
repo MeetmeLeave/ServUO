@@ -1226,7 +1226,7 @@ namespace Server.Engines.BulkOrders
             RewardCollection.Add(new BODCollectionItem(0x12B3, 1157298, CraftResources.GetHue(CraftResource.Agapite), 1000, RunicMalletAndChisel, 6));
             RewardCollection.Add(new BODCollectionItem(0x14EC, 1152672, CraftResources.GetHue(CraftResource.Frostwood), 1050, HarvestMap, (int)CraftResource.Frostwood));
             RewardCollection.Add(new BODCollectionItem(0x12B3, 1157299, CraftResources.GetHue(CraftResource.Verite), 1100, RunicMalletAndChisel, 7));
-            RewardCollection.Add(new BODCollectionItem(0x14EC, 1157226, CraftResources.GetHue(CraftResource.Heartwood), 1150, RunicDovetailSaw, 3));
+            RewardCollection.Add(new BODCollectionItem(0x1029, 1157226, CraftResources.GetHue(CraftResource.Heartwood), 1150, RunicDovetailSaw, 3));
             RewardCollection.Add(new BODCollectionItem(0x12B3, 1157300, CraftResources.GetHue(CraftResource.Valorite), 1150, RunicMalletAndChisel, 8));
         }
 
@@ -1253,7 +1253,7 @@ namespace Server.Engines.BulkOrders
             switch (type)
             {
                 default:
-                case 0: return new RunicDovetailSaw(CraftResource.OakWood, 50);
+                case 0: return new RunicDovetailSaw(CraftResource.OakWood, 45);
                 case 1: return new RunicDovetailSaw(CraftResource.AshWood, 35);
                 case 2: return new RunicDovetailSaw(CraftResource.YewWood, 25);
                 case 3: return new RunicDovetailSaw(CraftResource.Heartwood, 15);
@@ -1590,7 +1590,7 @@ namespace Server.Engines.BulkOrders
             new RewardType(250, typeof(UnbakedFruitPie), typeof(UnbakedPeachCobbler), typeof(UnbakedApplePie), typeof(UnbakedPumpkinPie)),
             new RewardType(300, typeof(CookedBird), typeof(FishSteak), typeof(FriedEggs), typeof(LambLeg), typeof(Ribs)),
             new RewardType(350, typeof(Cookies), typeof(Cake), typeof(Muffins), typeof(ThreeTieredCake)),
-            new RewardType(400, typeof(EnchantedApple), typeof(TribalPaint), typeof(WrathGrapes), typeof(EggBomb)),
+            new RewardType(400, typeof(EnchantedApple), typeof(TribalPaint), typeof(GrapesOfWrath), typeof(EggBomb)),
             new RewardType(450, typeof(MisoSoup), typeof(WhiteMisoSoup), typeof(RedMisoSoup), typeof(AwaseMisoSoup)),
             new RewardType(500, typeof(WasabiClumps), typeof(SushiRolls), typeof(SushiPlatter), typeof(GreenTea)),
         };
@@ -1691,7 +1691,7 @@ namespace Server.Engines.BulkOrders
             switch (type)
             {
                 default:
-                case 0: return new RunicFletcherTool(CraftResource.OakWood, 50);
+                case 0: return new RunicFletcherTool(CraftResource.OakWood, 45);
                 case 1: return new RunicFletcherTool(CraftResource.AshWood, 35);
                 case 2: return new RunicFletcherTool(CraftResource.YewWood, 25);
                 case 3: return new RunicFletcherTool(CraftResource.Heartwood, 15);

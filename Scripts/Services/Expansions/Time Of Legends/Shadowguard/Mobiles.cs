@@ -366,12 +366,15 @@ namespace Server.Engines.Shadowguard
 
         public override bool AlwaysMurderer { get { return true; } }
 
-        public override void OnDeath(Container c)
+        public override bool OnBeforeDeath()
         {
-            base.OnDeath(c);
+            if (!base.OnBeforeDeath())
+                return false;
 
             if (0.66 > Utility.RandomDouble() && Encounter != null)
-                c.DropItem(new Phylactery());
+                new Phylactery().MoveToWorld(Location, Map);
+
+            return true;
         }
 
         public override void GenerateLoot()
@@ -531,12 +534,14 @@ namespace Server.Engines.Shadowguard
             return base.OnMove(d);
         }
 
-        public override void Damage(int amount, Mobile from, bool informmount, bool checkfizzle)
+        public override int Damage(int amount, Mobile from, bool informmount, bool checkfizzle)
         {
             if (from == null || (ShadowguardController.GetEncounter(this.Location, this.Map) != null && this.Z == from.Z))
             {
-                base.Damage(amount, from, informmount, checkfizzle);
+                return base.Damage(amount, from, informmount, checkfizzle);
             }
+
+            return 0;
         }
 
         public override void GenerateLoot()
@@ -725,17 +730,17 @@ namespace Server.Engines.Shadowguard
             }
         }
 
-        public override void Damage(int amount, Mobile from, bool informMount, bool checkfizzle)
+        public override int Damage(int amount, Mobile from, bool informMount, bool checkfizzle)
         {
             RoofEncounter encounter = ShadowguardController.GetEncounter(this.Location, this.Map) as RoofEncounter;
 
             if (encounter != null && from != null)
             {
                 from.SendLocalizedMessage(1156254); // Minax laughs as she deflects your puny attacks! Defeat her minions to close the Time Gate!
-                return;
+                return 0;
             }
 
-            base.Damage(amount, from, informMount, checkfizzle);
+            return base.Damage(amount, from, informMount, checkfizzle);
         }
 
         public LadyMinax(Serial serial)

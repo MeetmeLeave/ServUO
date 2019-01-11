@@ -9,6 +9,7 @@ namespace Server.Items
     public abstract class BaseAddonDeed : Item, ICraftable
     {
         private CraftResource m_Resource;
+        private bool m_ReDeed;
 
         public BaseAddonDeed()
             : base(0x14F0)
@@ -25,6 +26,7 @@ namespace Server.Items
         }
 
         public abstract BaseAddon Addon { get; }
+
         public virtual bool UseCraftResource { get { return true; } }
 
         [CommandProperty(AccessLevel.GameMaster)]
@@ -45,11 +47,37 @@ namespace Server.Items
                 }
             }
         }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool IsReDeed
+        {
+            get { return m_ReDeed; }
+            set 
+            {
+                m_ReDeed = value;
+
+                if (UseCraftResource)
+                {
+                    if (m_ReDeed && ItemID == 0x14F0)
+                    {
+                        ItemID = 0x14EF;
+                    }
+                    else if (!m_ReDeed && ItemID == 0x14EF)
+                    {
+                        ItemID = 0x14F0;
+                    }
+                }
+            }
+        }
+
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
 
-            writer.Write(1); // version
+            writer.Write(2); // version
+
+            // Version 2
+            writer.Write(m_ReDeed);
 
             // Version 1
             writer.Write((int)m_Resource);
@@ -63,6 +91,11 @@ namespace Server.Items
 
             switch (version)
             {
+                case 2:
+                    {
+                        m_ReDeed = reader.ReadBool();
+                        goto case 1;
+                    }
                 case 1:
                     {
                         m_Resource = (CraftResource)reader.ReadInt();
@@ -70,8 +103,10 @@ namespace Server.Items
                     }
             }
 
-            if (Weight == 0.0)
-                Weight = 1.0;
+            if (version == 1 && UseCraftResource && Hue == 0 && m_Resource != CraftResource.None)
+            {
+                Hue = CraftResources.GetHue(m_Resource);
+            }
         }
 
         public override void OnDoubleClick(Mobile from)
@@ -103,6 +138,14 @@ namespace Server.Items
                 resourceType = craftItem.Resources.GetAt(0).ItemType;
 
             Resource = CraftResources.GetFromType(resourceType);
+
+            CraftContext context = craftSystem.GetContext(from);
+
+            if (context != null && context.DoNotColor)
+                Hue = 0;
+            else if (Hue == 0)
+                Hue = resHue;
+
             return quality;
         }
 
@@ -140,7 +183,7 @@ namespace Server.Items
                     {
                         addon.Resource = m_Deed.Resource;
 
-                        if (addon.RetainDeedHue)
+                        if (addon.RetainDeedHue || (m_Deed.Hue != 0 && CraftResources.GetHue(m_Deed.Resource) != m_Deed.Hue))
                             addon.Hue = m_Deed.Hue;
 
                         addon.MoveToWorld(new Point3D(p), map);

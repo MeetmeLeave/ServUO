@@ -72,10 +72,16 @@ namespace Server.Items
             return base.CheckItemUse(from, item);
         }
 
+        public virtual bool Security { get { return true; } }
+
         public override void GetContextMenuEntries(Mobile from, List<ContextMenuEntry> list)
         {
             base.GetContextMenuEntries(from, list);
-            SetSecureLevelEntry.AddTo(from, this, list);
+
+            if (Security)
+            {
+                SetSecureLevelEntry.AddTo(from, this, list);
+            }
         }
 
         public override void GetChildContextMenuEntries(Mobile from, List<ContextMenuEntry> list, Item item)
@@ -83,14 +89,10 @@ namespace Server.Items
             if (IsLockedDown)
             {
                 BaseHouse house = BaseHouse.FindHouseAt(this);
-                bool owner = house.IsOwner(from);
 
-                if (house != null)
+                if (house != null && house.IsOwner(from) && house.IsLockedDown(this) && house.IsLockedDown(item))
                 {
-                    if (owner && house != null && house.IsLockedDown(this) && house.IsLockedDown(item))
-                    {
-                        list.Add(new ReleaseEntry(from, item, house));
-                    }
+                    list.Add(new ReleaseEntry(from, item, house));
                 }
             }
             else
@@ -99,7 +101,7 @@ namespace Server.Items
             }
         }
 
-        public virtual void DropItemStack(Item dropped)
+        public virtual void DropItemStacked(Item dropped)
         {
             List<Item> list = Items;
 
@@ -1271,8 +1273,6 @@ namespace Server.Items
     [FlipableAttribute(0x4026, 0x4025)]
     public class GargishChest : LockableContainer
     {
-        public override int DefaultGumpID { get { return 0x42; } }
-
         [Constructable]
         public GargishChest()
             : base(0x4026)
@@ -1326,6 +1326,43 @@ namespace Server.Items
         public override void Deserialize(GenericReader reader)
         {
             base.Deserialize(reader);
+            int version = reader.ReadInt();
+        }
+    }
+
+    [FlipableAttribute(0xA0DB, 0xA0DC)]
+    public class EnchantedPicnicBasket : BaseContainer
+    {
+        public override int LabelNumber { get { return 1158333; } } // enchanted picnic basket
+
+        public override int DefaultGumpID { get { return 0x108; } }
+
+        [Constructable]
+        public EnchantedPicnicBasket()
+            : base(0xA0DB)
+        {
+            DropItem(new PicnicBlanketDeed());
+            DropItem(new Hamburger(3));
+            DropItem(new Sausage(3));
+            DropItem(new HotDog(3));
+        }
+
+        public EnchantedPicnicBasket(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+
             int version = reader.ReadInt();
         }
     }

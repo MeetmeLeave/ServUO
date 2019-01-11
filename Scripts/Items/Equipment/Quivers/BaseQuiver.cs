@@ -12,7 +12,7 @@ namespace Server.Items
     }
 
     [Alterable(typeof(DefTailoring), typeof(GargishLeatherWingArmor), true)]
-    public class BaseQuiver : Container, ICraftable, ISetItem, IVvVItem, IOwnerRestricted, IRangeDamage
+    public class BaseQuiver : Container, ICraftable, ISetItem, IVvVItem, IOwnerRestricted, IRangeDamage, IArtifact
     {
         private bool _VvVItem;
         private Mobile _Owner;
@@ -77,6 +77,8 @@ namespace Server.Items
                 return base.DisplayWeight;
             }
         }
+
+        public virtual int ArtifactRarity { get { return 0; } }
 
         private AosAttributes m_Attributes;
         private AosSkillBonuses m_AosSkillBonuses;
@@ -262,6 +264,8 @@ namespace Server.Items
         {
         }
 
+        public override bool DisplaysContent { get { return false; } }
+
         public override void OnAfterDuped(Item newItem)
         {
             var quiver = newItem as BaseQuiver;
@@ -352,6 +356,7 @@ namespace Server.Items
             }
 
             Item ammo = Ammo;
+
             if(ammo != null && ammo.Amount > 0)
             {
                 if (IsArrowAmmo && item is Bolt)
@@ -369,14 +374,27 @@ namespace Server.Items
 
                 if (item.Amount + currentAmount <= m_Capacity)
                     return base.CheckHold(m, item, message, checkItems, plusItems, plusWeight);
+            }
 
+            return false;
+        }
+
+        public override bool CheckStack(Mobile from, Item item)
+        {
+            if (!CheckType(item))
+            {
                 return false;
             }
-            else if (checkItems)
-                return false;
 
-            if (ammo == null || ammo.Deleted)
-                return false;
+            Item ammo = Ammo;
+
+            if (ammo != null)
+            {
+                int currentAmount = Items.Sum(i => i.Amount);
+
+                if (item.Amount + currentAmount <= m_Capacity)
+                    return base.CheckStack(from, item);
+            }
 
             return false;
         }
@@ -547,6 +565,12 @@ namespace Server.Items
             }
             else
                 list.Add(1075265, "{0}\t{1}", 0, Capacity); // Ammo: ~1_QUANTITY~/~2_CAPACITY~ arrows
+
+
+            if (ArtifactRarity > 0)
+            {
+                list.Add(1061078, ArtifactRarity.ToString()); // artifact rarity ~1_val~
+            }
 
             int prop;
 

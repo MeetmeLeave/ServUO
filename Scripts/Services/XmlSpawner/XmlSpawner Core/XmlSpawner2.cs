@@ -2,26 +2,29 @@
 //#define RESTRICTCONSTRUCTABLE
 
 using System;
-using System.Data;
-using System.IO;
 using System.Collections;
 using System.Collections.Generic;
-using Server;
-using Server.Items;
-using Server.Network;
-using Server.Gumps;
-using Server.Targeting;
+using System.Data;
+using System.IO;
 using System.Reflection;
+
+using Server;
+using Server.Accounting;
 using Server.Commands;
 using Server.Commands.Generic;
-using CPA = Server.CommandPropertyAttribute;
-using System.Xml;
-using Server.Spells;
-using System.Text;
-using Server.Accounting;
+using Server.ContextMenus;
 using System.Diagnostics;
-using Server.Misc;
 using Server.Engines.XmlSpawner2;
+using Server.Gumps;
+using Server.Items;
+using Server.Misc;
+using Server.Network;
+using Server.Spells;
+using Server.Targeting;
+using System.Text;
+using System.Xml;
+
+using CPA = Server.CommandPropertyAttribute;
 
 /*
 ** XmlSpawner2
@@ -36,7 +39,6 @@ using Server.Engines.XmlSpawner2;
 
 namespace Server.Mobiles
 {
-
 	public class XmlSpawner : Item, ISpawner
 	{
 		private static bool m_XmlPoints;
@@ -46,12 +48,14 @@ namespace Server.Mobiles
 		public static bool PointsEnabled { get { return m_XmlPoints; } }
 		public static bool FactionsEnabled { get { return m_XmlFactions; } }
 		public static bool SocketsEnabled { get { return m_XmlSockets; } }
+
 		public static void Configure()
 		{
 			m_XmlPoints = Config.Get("XmlSpawner2.Points", false);
 			m_XmlFactions = Config.Get("XmlSpawner2.Factions", false);
 			m_XmlSockets = Config.Get("XmlSpawner2.Sockets", false);
 		}
+
 		#region Type declarations
 
 		public enum TODModeType { Realtime, Gametime }
@@ -1005,6 +1009,7 @@ namespace Server.Mobiles
 			}
 		}
 
+		[CommandProperty(AccessLevel.GameMaster)]
 		public Region SpawnRegion
 		{
 			get { return m_Region; }
@@ -1975,6 +1980,12 @@ namespace Server.Mobiles
 		public Point3D HomeLocation { get { return this.Location; } }
 		public int Range { get { return HomeRange; } }
 
+		public virtual void GetSpawnProperties(ISpawnable spawn, ObjectPropertyList list)
+		{ }
+
+		public virtual void GetSpawnContextEntries(ISpawnable spawn, Mobile user, List<ContextMenuEntry> list)
+		{ }
+
 		public void Remove(ISpawnable spawn)
 		{
 			if (m_SpawnObjects == null) return;
@@ -2023,6 +2034,7 @@ namespace Server.Mobiles
 		}
 
 		#endregion
+
 		#region Method Overrides
 
 		public override void OnAfterDuped(Item newItem)
@@ -10971,13 +10983,42 @@ public static void _TraceEnd(int index)
 		{
 			if (listi != null)
 			{
-				for(int i=listi.Count - 1; i>=0; --i)
-					listi[i].Delete();
+				var i = listi.Count;
+
+				while (--i >= 0)
+				{
+					if (i < listi.Count && listi[i] != null)
+					{
+						try
+						{
+							listi[i].Delete();
+						}
+						catch
+						{ }
+					}
+				}
+
+				listi.Clear();
 			}
+
 			if(listm != null)
 			{
-				for(int i=listm.Count - 1; i>=0; --i)
-					listm[i].Delete();
+				var i = listm.Count;
+
+				while (--i >= 0)
+				{
+					if (i < listm.Count && listm[i] != null)
+					{
+						try
+						{
+							listm[i].Delete();
+						}
+						catch
+						{ }
+					}
+				}
+
+				listm.Clear();
 			}
 		}
 
@@ -12758,8 +12799,6 @@ public static void _TraceEnd(int index)
 			}
 		}
 
-
 		#endregion
-
 	}
 }

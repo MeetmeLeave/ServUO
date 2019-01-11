@@ -1,12 +1,7 @@
-#region Header
-// **********
-// ServUO - BaseCreature.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Server.ContextMenus;
@@ -14,6 +9,7 @@ using Server.Engines.PartySystem;
 using Server.Engines.Quests;
 using Server.Engines.Quests.Doom;
 using Server.Engines.Quests.Haven;
+using Server.Engines.VvV;
 using Server.Engines.XmlSpawner2;
 using Server.Ethics;
 using Server.Factions;
@@ -21,23 +17,21 @@ using Server.Items;
 using Server.Misc;
 using Server.Multis;
 using Server.Network;
+using Server.Prompts;
 using Server.Regions;
+using Server.Services.Virtues;
 using Server.SkillHandlers;
 using Server.Spells;
 using Server.Spells.Bushido;
 using Server.Spells.Necromancy;
 using Server.Spells.Sixth;
+using Server.Spells.SkillMasteries;
 using Server.Spells.Spellweaving;
 using Server.Targeting;
-using System.Linq;
-using Server.Spells.SkillMasteries;
-using Server.Prompts;
-using Server.Engines.VvV;
 #endregion
 
 namespace Server.Mobiles
 {
-
     #region Enums
     /// <summary>
     ///     Summary description for MobileAI.
@@ -83,7 +77,8 @@ namespace Server.Mobiles
         Fish = 0x0008,
         Eggs = 0x0010,
         Gold = 0x0020,
-        Metal = 0x0040
+        Metal = 0x0040,
+        BlackrockStew = 0x0080
     }
 
     [Flags]
@@ -126,8 +121,16 @@ namespace Server.Mobiles
         Regular,
         Spined,
         Horned,
-        Barbed,
-        Fur
+        Barbed
+    }
+
+    public enum FurType
+    {
+        None,
+        Green,
+        LightBrown,
+        Yellow,
+        Brown
     }
 
     public enum TribeType
@@ -198,6 +201,39 @@ namespace Server.Mobiles
     public class BaseCreature : Mobile, IHonorTarget, IEngravable
     {
         public const int MaxLoyalty = 100;
+
+        private bool _LockDirection;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool LockDirection
+        {
+            get
+            {
+                if (AIObject == null)
+                {
+                    return _LockDirection;
+                }
+
+                return AIObject.DirectionLocked = _LockDirection;
+            }
+            set
+            {
+                _LockDirection = value;
+
+                if (AIObject != null)
+                {
+                    AIObject.DirectionLocked = value;
+                }
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool CanMove { get; set; }
+
+        public virtual bool CanCallGuards
+        {
+            get { return !Deleted && Alive && !AlwaysMurderer && Kills < 5 && (Player || Body.IsHuman); }
+        }
 
         #region Var declarations
         private BaseAI m_AI; // THE AI
@@ -334,9 +370,6 @@ namespace Server.Mobiles
         protected DateTime SummonEnd { get { return m_SummonEnd; } set { m_SummonEnd = value; } }
 
         public virtual Faction FactionAllegiance { get { return null; } }
-        public virtual int FactionSilverWorth { get { return 30; } }
-
-        public virtual int BaseLootBudget { get { return RandomItemGenerator.GetBaseBudget(this); } }
 
         public virtual int DefaultHitsRegen 
         {
@@ -559,6 +592,11 @@ namespace Server.Mobiles
             }
         }
 
+        public virtual TrainingDefinition TrainingDefinition
+        {
+            get { return null; }
+        }
+
         public virtual void InitializeAbilities()
         {
             switch (AI)
@@ -584,13 +622,13 @@ namespace Server.Mobiles
             }
 
             if (PetTrainingHelper.Enabled)
-                return;
+            {
+                if (Skills[SkillName.Focus].Value == 0)
+                    SetSkill(SkillName.Focus, 2, 20);
 
-            if(Skills[SkillName.Focus].Value == 0)
-                SetSkill(SkillName.Focus, 2, 20);
-
-            if(Skills[SkillName.DetectHidden].Value == 0 && !(this is BaseVendor))
-                SetSkill(SkillName.DetectHidden, Utility.RandomList(10, 60));
+                if (Skills[SkillName.DetectHidden].Value == 0 && !(this is BaseVendor))
+                    SetSkill(SkillName.DetectHidden, Utility.RandomList(10, 60));
+            }
         }
 
         public void SetMagicalAbility(MagicalAbility ability)
@@ -611,6 +649,31 @@ namespace Server.Mobiles
         public void SetWeaponAbility(WeaponAbility ability)
         {
             PetTrainingHelper.GetAbilityProfile(this, true).AddAbility(ability, false);
+        }
+
+        public void RemoveMagicalAbility(MagicalAbility ability)
+        {
+            PetTrainingHelper.GetAbilityProfile(this, true).RemoveAbility(ability);
+        }
+
+        public void RemoveSpecialAbility(SpecialAbility ability)
+        {
+            PetTrainingHelper.GetAbilityProfile(this, true).RemoveAbility(ability);
+        }
+
+        public void RemoveAreaEffect(AreaEffect ability)
+        {
+            PetTrainingHelper.GetAbilityProfile(this, true).RemoveAbility(ability);
+        }
+
+        public void RemoveWeaponAbility(WeaponAbility ability)
+        {
+            PetTrainingHelper.GetAbilityProfile(this, true).RemoveAbility(ability);
+        }
+
+        public bool HasAbility(object o)
+        {
+            return PetTrainingHelper.GetAbilityProfile(this, true).HasAbility(o);
         }
 
         public virtual double AverageThreshold { get { return 0.33; } }
@@ -674,30 +737,37 @@ namespace Server.Mobiles
 
         public void AdjustTameRequirements()
         {
-            // Currently, with increased control slots, taming skill does not seem to pass 108.0
-            if(ControlSlots <=ControlSlotsMin)
-            {
-                CurrentTameSkill = MinTameSkill;
-            }
-            else if (MinTameSkill < 108)
-            {
-                double minSkill = Math.Ceiling(MinTameSkill);
+            CurrentTameSkill = CalculateCurrentTameSkill(ControlSlots);
+        }
 
+        public double CalculateCurrentTameSkill(int currentControlSlots)
+        {
+            double minSkill = Math.Ceiling(MinTameSkill);
+            double current = 0;
+
+            if (currentControlSlots <= ControlSlots)
+            {
+                current = MinTameSkill;
+            }
+            else if (MinTameSkill < 108) // Currently, with increased control slots, taming skill does not seem to pass 108.0
+            {
                 if (MinTameSkill < 0)
                 {
-                    CurrentTameSkill = Math.Ceiling(Math.Min(108.0, Math.Max(0, CurrentTameSkill) + (Math.Abs(minSkill) * .7)));
+                    current = Math.Ceiling(Math.Min(108.0, Math.Max(0, CurrentTameSkill) + (Math.Abs(minSkill) * .7)));
                 }
                 else
                 {
-                    double level = ControlSlots - ControlSlotsMin;
+                    double level = currentControlSlots - ControlSlotsMin;
                     double levelFactor = (double)(1 + (ControlSlotsMax - ControlSlotsMin)) / minSkill;
 
-                    CurrentTameSkill = Math.Ceiling(Math.Min(108.0, minSkill + (minSkill * ((levelFactor * 7) * level))));
+                    current = Math.Ceiling(Math.Min(108.0, minSkill + (minSkill * ((levelFactor * 7) * level))));
                 }
-
-                if (CurrentTameSkill < MinTameSkill)
-                    CurrentTameSkill = MinTameSkill;
             }
+
+            if (current < MinTameSkill)
+                current = MinTameSkill;
+
+            return current;
         }
         #endregion
 
@@ -770,8 +840,6 @@ namespace Server.Mobiles
             }
         }
         #endregion
-
-        public virtual bool AutoRearms { get { return false; } }
 
         public virtual double WeaponAbilityChance { get { return 0.4; } }
 
@@ -866,28 +934,28 @@ namespace Server.Mobiles
 
         [CommandProperty(AccessLevel.GameMaster)]
         public bool IsParagon
-        {
-            get { return m_Paragon; }
-            set
-            {
-                if (m_Paragon == value)
-                {
-                    return;
-                }
-                else if (value)
-                {
-                    XmlParagon.Convert(this);
-                }
-                else
-                {
-                    XmlParagon.UnConvert(this);
-                }
+		{
+			get{ return m_Paragon; }
+			set
+			{
+				if (m_Paragon == value)
+				{
+					return;
+				}
+				else if (value)
+				{
+					Paragon.Convert(this);
+				}
+				else
+				{
+					Paragon.UnConvert(this);
+				}
 
-                m_Paragon = value;
+				m_Paragon = value;
 
-                InvalidateProperties();
-            }
-        }
+				InvalidateProperties();
+			}
+		}
 
         [CommandProperty(AccessLevel.GameMaster)]
         public bool IsChampionSpawn
@@ -895,12 +963,20 @@ namespace Server.Mobiles
             get { return m_IsChampionSpawn; }
             set
             {
-                if (!m_IsChampionSpawn && value)
-                    SetToChampionSpawn();
+				if (m_IsChampionSpawn != value)
+				{
+	                if (!m_IsChampionSpawn && value)
+	                    SetToChampionSpawn();
+	
+	                m_IsChampionSpawn = value;
 
-                m_IsChampionSpawn = value;
+                    OnChampionSpawnChange();
+				}
             }
         }
+
+        protected virtual void OnChampionSpawnChange()
+        { }
 
         [CommandProperty(AccessLevel.GameMaster)]
         public Mobile InitialFocus
@@ -946,8 +1022,6 @@ namespace Server.Mobiles
 
         public bool IsAmbusher { get; set; }
 
-        public virtual bool HasManaOveride { get { return false; } }
-
         public virtual FoodType FavoriteFood { get { return FoodType.Meat; } }
         public virtual PackInstinct PackInstinct { get { return PackInstinct.None; } }
 
@@ -990,6 +1064,23 @@ namespace Server.Mobiles
         public virtual bool ShowSpellMantra { get { return false; } }
         public virtual bool FreezeOnCast { get { return ShowSpellMantra; } }
         public virtual bool CanFly { get { return false; } }
+
+        public virtual bool CanAutoStable
+		{ 
+			get 
+			{
+				if(!(ControlMaster is PlayerMobile))
+					return false;
+
+				if(Allured || Summoned)
+					return false;
+
+				if(this is IMount && ((IMount)this).Rider != null)
+					return false;
+
+				return true;
+			}
+		}
 
         #region High Seas
         public virtual bool TaintedLifeAura { get { return false; } }
@@ -1172,7 +1263,7 @@ namespace Server.Mobiles
 
             if (IsParagon)
             {
-                damage = (int)(damage / XmlParagon.GetHitsBuff(this));
+                damage = (int)(damage / Paragon.HitsBuff);
             }
 
             if (damage > 200)
@@ -1247,23 +1338,7 @@ namespace Server.Mobiles
 
         public virtual void DrainLife()
         {
-            List<Mobile> list = new List<Mobile>();
-
-            IPooledEnumerable eable = GetMobilesInRange(2);
-            foreach (Mobile m in eable)
-            {
-                if (m == this || !CanBeHarmful(m))
-                    continue;
-
-                if (m is BaseCreature && (((BaseCreature)m).Controlled || ((BaseCreature)m).Summoned || ((BaseCreature)m).Team != Team))
-                    list.Add(m);
-                else if (m.Player)
-                    list.Add(m);
-            }
-
-            eable.Free();
-
-            foreach (Mobile m in list)
+            foreach (Mobile m in SpellHelper.AcquireIndirectTargets(this, this, Map, 2).OfType<Mobile>())
             {
                 DoHarmful(m);
 
@@ -1286,8 +1361,6 @@ namespace Server.Mobiles
                 Hits += toDrain;
                 m.Damage(toDrain, this);
             }
-
-            ColUtility.Free(list);
         }
         #endregion
 
@@ -1647,6 +1720,7 @@ namespace Server.Mobiles
                     {
                         return (c.GetMaster().Karma < 0);
                     }
+
                     return (m.Karma < 0);
                 }
 
@@ -1657,6 +1731,7 @@ namespace Server.Mobiles
                     {
                         return (c.GetMaster().Karma > 0);
                     }
+
                     return (m.Karma > 0);
                 }
 
@@ -1708,13 +1783,7 @@ namespace Server.Mobiles
 			{
 				return true;
 			}
-/*
-			// Creatures attacking me are my enemies
-			if (c.Combatant == this)
-			{
-				return true;
-			}
-*/
+
 			// If I'm summoned/controlled and they aren't summoned/controlled, they are my enemy
 			// If I'm not summoned/controlled and they are summoned/controlled, they are my enemy
             // Summoned creatures must have masters to count as summoned here
@@ -1724,24 +1793,16 @@ namespace Server.Mobiles
 
         public override string ApplyNameSuffix(string suffix)
         {
-            XmlData customtitle = (XmlData)XmlAttach.FindAttachment(this, typeof(XmlData), "ParagonTitle");
-
-            if (customtitle != null)
-            {
-                suffix = customtitle.Data;
-            }
-            else if (IsParagon && !GivesMLMinorArtifact)
+            if (IsParagon && !GivesMLMinorArtifact)
             {
                 if (suffix.Length == 0)
                 {
-                    suffix = XmlParagon.GetParagonLabel(this);
+                    suffix = "(Paragon)";
                 }
                 else
                 {
-                    suffix = String.Concat(suffix, " " + XmlParagon.GetParagonLabel(this));
+                    suffix = String.Concat( suffix, " (Paragon)" );
                 }
-
-                XmlAttach.AttachTo(this, new XmlData("ParagonTitle", suffix));
             }
 
             return base.ApplyNameSuffix(suffix);
@@ -1849,8 +1910,6 @@ namespace Server.Mobiles
 
             chance -= (MaxLoyalty - m_Loyalty) * 10;
 
-            chance += (int)XmlMobFactions.GetScaledFaction(m, this, -250, 250, 0.001);
-
             return ((double)chance / 1000);
         }
 
@@ -1911,24 +1970,24 @@ namespace Server.Mobiles
             }
         }
 
-        public override void Damage(int amount, Mobile from)
+        public override int Damage(int amount, Mobile from)
         {
-            Damage(amount, from, false, false);
+            return Damage(amount, from, false, false);
         }
 
-        public override void Damage(int amount, Mobile from, bool informMount)
+        public override int Damage(int amount, Mobile from, bool informMount)
         {
-            Damage(amount, from, informMount, false);
+            return Damage(amount, from, informMount, false);
         }
 
-        public override void Damage(int amount, Mobile from, bool informMount, bool checkDisrupt)
+        public override int Damage(int amount, Mobile from, bool informMount, bool checkDisrupt)
         {
             int oldHits = Hits;
 
             if (Core.AOS && Controlled && from is BaseCreature && !((BaseCreature)from).Controlled && !((BaseCreature)from).Summoned)
                 amount = (int)(amount * ((BaseCreature)from).BonusPetDamageScalar);
 
-            base.Damage(amount, from, informMount, checkDisrupt);
+            amount = base.Damage(amount, from, informMount, checkDisrupt);
 
             if (SubdueBeforeTame && !Controlled)
             {
@@ -1937,6 +1996,8 @@ namespace Server.Mobiles
                     PublicOverheadMessage(MessageType.Regular, 0x3B2, false, "* The creature has been beaten into subjugation! *");
                 }
             }
+
+            return amount;
         }
 
         public virtual bool DeleteCorpseOnDeath { get { return !Core.AOS && m_bSummoned; } }
@@ -1953,7 +2014,7 @@ namespace Server.Mobiles
 
         public override void OnBeforeSpawn(Point3D location, Map m)
         {
-            if (XmlParagon.CheckConvert(this, location, m))
+            if (Paragon.CheckConvert(this, location, m))
             {
                 IsParagon = true;
             }
@@ -2114,9 +2175,11 @@ namespace Server.Mobiles
         {
             get
             {
+                int value = Str;
+
                 if (m_HitsMax > 0)
                 {
-                    int value = m_HitsMax + GetStatOffset(StatType.Str);
+                    value = m_HitsMax + GetStatOffset(StatType.Str);
 
                     if (value < 1)
                     {
@@ -2126,11 +2189,16 @@ namespace Server.Mobiles
                     {
                         value = 1000000;
                     }
-
-                    return value;
                 }
 
-                return Str;
+                // Skill Masteries
+                if (Core.TOL)
+                {
+                    value += ToughnessSpell.GetHPBonus(this);
+                    value += InvigorateSpell.GetHPBonus(this);
+                }
+
+                return value;
             }
         }
 
@@ -2250,6 +2318,11 @@ namespace Server.Mobiles
 
         public override void OnDamage(int amount, Mobile from, bool willKill)
         {
+            if (Core.SA && from != null)
+            {
+                from.RegisterDamage(amount, this);
+            }
+
             if (BardPacified && (HitsMax - Hits) * 0.001 > Utility.RandomDouble())
             {
                 Unpacify();
@@ -2285,8 +2358,6 @@ namespace Server.Mobiles
                 Confidence.StopRegenerating(this);
             }
 
-            WeightOverloading.FatigueOnDamage(this, amount);
-
             InhumanSpeech speechType = SpeechType;
 
             if (speechType != null && !willKill)
@@ -2310,13 +2381,6 @@ namespace Server.Mobiles
             {
                 Timer.DelayCall(TimeSpan.FromSeconds(10), ((PlayerMobile)@from).RecoverAmmo);
             }
-
-            #region XmlSpawner
-            if (!Summoned && willKill && from != null)
-            {
-                LevelItemManager.CheckItems(from, this);
-            }
-            #endregion
 
             base.OnDamage(amount, from, willKill);
         }
@@ -2397,10 +2461,12 @@ namespace Server.Mobiles
             int hides = Hides;
             int scales = Scales;
             int dragonblood = DragonBlood;
+            int fur = Fur;
 
-            bool special = with is SkinningKnife || with is ButchersWarCleaver || with is HarvestersBlade;
+            bool special = with is HarvestersBlade;
 
-            if ((feathers == 0 && wool == 0 && meat == 0 && hides == 0 && scales == 0) || Summoned || IsBonded || corpse.Animated)
+
+            if ((feathers == 0 && wool == 0 && meat == 0 && hides == 0 && scales == 0 && fur == 0) || Summoned || IsBonded || corpse.Animated)
             {
                 if (corpse.Animated)
                 {
@@ -2423,6 +2489,7 @@ namespace Server.Mobiles
                     feathers *= 2;
                     wool *= 2;
                     hides *= 2;
+                    fur *= 2;
 
                     if (Core.ML)
                     {
@@ -2444,69 +2511,79 @@ namespace Server.Mobiles
 
                 if (feathers != 0)
                 {
-                    corpse.AddCarvedItem(new Feather(feathers), from);
-                    from.SendLocalizedMessage(500479); // You pluck the bird. The feathers are now on the corpse.
+                    Item feather = new Feather(feathers);
+
+                    if (!Core.AOS || !special || !from.AddToBackpack(feather))
+                    {
+                        corpse.AddCarvedItem(feather, from);
+                        from.SendLocalizedMessage(500479); // You pluck the bird. The feathers are now on the corpse.
+                    }
+                    else
+                    {
+                        from.SendLocalizedMessage(1114097); // You pluck the bird and place the feathers in your backpack.
+                    }
                 }
 
                 if (wool != 0)
                 {
-                    corpse.AddCarvedItem(new TaintedWool(wool), from);
-                    from.SendLocalizedMessage(500483); // You shear it, and the wool is now on the corpse.
+                    Item w = new TaintedWool(wool);
+
+                    if (!Core.AOS || !special || !from.AddToBackpack(w))
+                    {
+                        corpse.AddCarvedItem(w, from);
+                        from.SendLocalizedMessage(500483); // You shear it, and the wool is now on the corpse.
+                    }
+                    else
+                    {
+                        from.SendLocalizedMessage(1114099); // You shear the creature and put the resources in your backpack.
+                    }
                 }
 
                 if (meat != 0)
                 {
-                    if (MeatType == MeatType.Ribs)
-                        corpse.AddCarvedItem(new RawRibs(meat), from);
-                    else if (MeatType == MeatType.Bird)
-                        corpse.AddCarvedItem(new RawBird(meat), from);
-                    else if (MeatType == MeatType.LambLeg)
-                        corpse.AddCarvedItem(new RawLambLeg(meat), from);
-                    else if (MeatType == MeatType.Rotworm)
-                        corpse.AddCarvedItem(new RawRotwormMeat(meat), from);
+                    Item m = null;
 
-                    from.SendLocalizedMessage(500467); // You carve some meat, which remains on the corpse.
+                    switch (MeatType)
+                    {
+                        default:
+                        case MeatType.Ribs: m = new RawRibs(meat); break;
+                        case MeatType.Bird: m = new RawBird(meat); break;
+                        case MeatType.LambLeg: m = new RawLambLeg(meat); break;
+                        case MeatType.Rotworm: m = new RawRotwormMeat(meat); break;
+                    }
+
+                    if (!Core.AOS || !special || !from.AddToBackpack(m))
+                    {
+                        corpse.AddCarvedItem(m, from);
+                        from.SendLocalizedMessage(500467); // You carve some meat, which remains on the corpse.
+                    }
+                    else
+                    {
+                        from.SendLocalizedMessage(1114101); // You carve some meat and put it in your backpack.
+                    }
                 }
 
                 if (hides != 0)
                 {
-                    if (Core.AOS && special)
+                    Item leather = null;
+
+                    switch (HideType)
                     {
-                        Item leather = null;
+                        default:
+                        case HideType.Regular: leather = new Leather(hides); break;
+                        case HideType.Spined: leather = new SpinedLeather(hides); break;
+                        case HideType.Horned: leather = new HornedLeather(hides); break;
+                        case HideType.Barbed: leather = new BarbedLeather(hides); break;
+                    }
 
-                        switch (HideType)
-                        {
-                            case HideType.Regular: leather = new Leather(hides); break;
-                            case HideType.Spined: leather = new SpinedLeather(hides); break;
-                            case HideType.Horned: leather = new HornedLeather(hides); break;
-                            case HideType.Barbed: leather = new BarbedLeather(hides); break;
-                        }
-
-                        if (leather != null)
-                        {
-                            if (!from.PlaceInBackpack(leather))
-                            {
-                                corpse.AddCarvedItem(leather, from);
-                                from.SendLocalizedMessage(500471); // You skin it, and the hides are now in the corpse.
-                            }
-                            else
-                            {
-                                from.SendLocalizedMessage(1073555); // You skin it and place the cut-up hides in your backpack.
-                            }
-                        }
+                    if (!Core.AOS || !special || !from.AddToBackpack(leather) || !(with is ButchersWarCleaver))
+                    {
+                        corpse.AddCarvedItem(leather, from);
+                        from.SendLocalizedMessage(500471); // You skin it, and the hides are now in the corpse.
                     }
                     else
                     {
-                        if (HideType == HideType.Regular)
-                            corpse.AddCarvedItem(new Hides(hides), from);
-                        else if (HideType == HideType.Spined)
-                            corpse.AddCarvedItem(new SpinedHides(hides), from);
-                        else if (HideType == HideType.Horned)
-                            corpse.AddCarvedItem(new HornedHides(hides), from);
-                        else if (HideType == HideType.Barbed)
-                            corpse.AddCarvedItem(new BarbedHides(hides), from);
-
-                        from.SendLocalizedMessage(500471); // You skin it, and the hides are now in the corpse.
+                        from.SendLocalizedMessage(1073555); // You skin it and place the cut-up hides in your backpack.
                     }
                 }
 
@@ -2517,6 +2594,7 @@ namespace Server.Mobiles
 
                     switch (sc)
                     {
+                        default:
                         case ScaleType.Red: list.Add(new RedScales(scales)); break;
                         case ScaleType.Yellow: list.Add(new YellowScales(scales)); break;
                         case ScaleType.Black: list.Add(new BlackScales(scales)); break;
@@ -2534,21 +2612,66 @@ namespace Server.Mobiles
                                 break;
                             }
                     }
-                    
-                    foreach (Item s in list)
+
+                    if (Core.AOS && special)
                     {
-                        corpse.AddCarvedItem(s, from);
+                        bool allPack = true;
+                        bool anyPack = false;
+
+                        foreach (Item s in list)
+                        {
+                            //corpse.AddCarvedItem(s, from);
+                            if (!from.PlaceInBackpack(s))
+                            {
+                                corpse.AddCarvedItem(s, from);
+                                allPack = false;
+                            }
+                            else if (!anyPack)
+                            {
+                                anyPack = true;
+                            }
+                        }
+
+                        if (anyPack)
+                            from.SendLocalizedMessage(1114098); // You cut away some scales and put them in your backpack.
+
+                        if (!allPack)
+                            from.SendLocalizedMessage(1079284); // You cut away some scales, but they remain on the corpse.
+                    }
+                    else
+                    {
+                        foreach (Item s in list)
+                        {
+                            corpse.AddCarvedItem(s, from);
+                        }
+
+                        from.SendLocalizedMessage(1079284); // You cut away some scales, but they remain on the corpse.
                     }
 
-                    list.Clear();
-
-                    from.SendLocalizedMessage(1079284); // You cut away some scales, but they remain on the corpse.
+                    ColUtility.Free(list);
                 }
 
                 if (dragonblood != 0)
                 {
-                    corpse.AddCarvedItem(new DragonBlood(dragonblood), from);
-                    from.SendLocalizedMessage(1094946); // Some blood is left on the corpse.
+                    Item dblood = new DragonBlood(dragonblood);
+
+                    if (!Core.AOS || !special || !from.AddToBackpack(dblood))
+                    {
+                        corpse.AddCarvedItem(dblood, from);
+                        from.SendLocalizedMessage(1094946); // Some blood is left on the corpse.
+                    }
+                    else
+                    {
+                        from.SendLocalizedMessage(1114100); // You take some blood off the corpse and put it in your backpack.
+                    }
+                }
+
+                if (fur != 0)
+                {
+                    Item _fur = new Fur(FurType, fur);
+
+                    corpse.AddCarvedItem(_fur, from);
+                    from.SendLocalizedMessage(1112765); // You shear it, and the fur is now on the corpse.
                 }
 
                 corpse.Carved = true;
@@ -2566,6 +2689,13 @@ namespace Server.Mobiles
         public BaseCreature(
             AIType ai, FightMode mode, int iRangePerception, int iRangeFight, double dActiveSpeed, double dPassiveSpeed)
         {
+            PhysicalDamage = 100;
+
+            CanMove = true;
+
+            ApproachWait = false;
+            ApproachRange = 10;
+
             if (iRangePerception == OldRangePerception)
             {
                 iRangePerception = DefaultRangePerception;
@@ -2621,7 +2751,7 @@ namespace Server.Mobiles
 
             InitializeAbilities();
 
-            Timer.DelayCall(() =>GenerateLoot(true));
+            Timer.DelayCall(GenerateLoot, true);
         }
 
         public BaseCreature(Serial serial)
@@ -2637,7 +2767,12 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(25); // version
+            writer.Write(26); // version
+
+            writer.Write(CanMove);
+            writer.Write(_LockDirection);
+            writer.Write(ApproachWait);
+            writer.Write(ApproachRange);
 
             writer.Write((int)m_CurrentAI);
             writer.Write((int)m_DefaultAI);
@@ -2661,12 +2796,14 @@ namespace Server.Mobiles
             int i = 0;
 
             writer.Write(m_arSpellAttack.Count);
+
             for (i = 0; i < m_arSpellAttack.Count; i++)
             {
                 writer.Write(m_arSpellAttack[i].ToString());
             }
 
             writer.Write(m_arSpellDefense.Count);
+
             for (i = 0; i < m_arSpellDefense.Count; i++)
             {
                 writer.Write(m_arSpellDefense[i].ToString());
@@ -2681,8 +2818,7 @@ namespace Server.Mobiles
             writer.Write(m_ControlDest);
             writer.Write((int)m_ControlOrder);
             writer.Write(m_dMinTameSkill);
-            // Removed in version 9
-            //writer.Write( (double) m_dMaxTameSkill );
+
             writer.Write(m_bTamable);
             writer.Write(m_bSummoned);
 
@@ -2810,6 +2946,19 @@ namespace Server.Mobiles
             base.Deserialize(reader);
 
             int version = reader.ReadInt();
+
+            switch (version)
+            {
+                case 26:
+                {
+                    CanMove = reader.ReadBool();
+                    _LockDirection = reader.ReadBool();
+
+                    ApproachWait = reader.ReadBool();
+                    ApproachRange = reader.ReadInt();
+                }
+                    break;
+            }
 
             m_CurrentAI = (AIType)reader.ReadInt();
             m_DefaultAI = (AIType)reader.ReadInt();
@@ -3075,6 +3224,14 @@ namespace Server.Mobiles
                 reader.ReadInt();
             }
 
+            if (version < 26)
+            {
+                CanMove = true;
+
+                ApproachWait = false;
+                ApproachRange = 10;
+            }
+
             if (version >= 22)
             {
                 m_EngravedText = reader.ReadString();
@@ -3248,6 +3405,11 @@ namespace Server.Mobiles
             typeof(GoldIngot), typeof(AgapiteIngot), typeof(VeriteIngot), typeof(ValoriteIngot)
         };
 
+        private static readonly Type[] m_BlackrockStew =
+        {
+            typeof(BowlOfBlackrockStew)
+        };
+
         public virtual bool CheckFoodPreference(Item f)
         {
             if (CheckFoodPreference(f, FoodType.Eggs, m_Eggs))
@@ -3280,6 +3442,11 @@ namespace Server.Mobiles
                 return true;
             }
 
+            if (CheckFoodPreference(f, FoodType.BlackrockStew, m_BlackrockStew))
+            {
+                return true;
+            }
+
             return false;
         }
 
@@ -3303,11 +3470,12 @@ namespace Server.Mobiles
 
         public virtual bool CheckFeed(Mobile from, Item dropped)
         {
-            if (!IsDeadPet && Controlled && (ControlMaster == from || IsPetFriend(from)) &&
+            if (!IsDeadPet && Controlled && (ControlMaster == from || IsPetFriend(from))) /*&&
                 (dropped is Food || dropped is Gold || dropped is CookableFood || dropped is Head || dropped is LeftArm ||
                  dropped is LeftLeg || dropped is Torso || dropped is RightArm || dropped is RightLeg || dropped is IronIngot ||
                  dropped is DullCopperIngot || dropped is ShadowIronIngot || dropped is CopperIngot || dropped is BronzeIngot ||
-                 dropped is GoldIngot || dropped is AgapiteIngot || dropped is VeriteIngot || dropped is ValoriteIngot))
+                 dropped is GoldIngot || dropped is AgapiteIngot || dropped is VeriteIngot || dropped is ValoriteIngot))*/
+                // Why do we need all this crap, when its checked in CheckFootPreference?
             {
                 Item f = dropped;
 
@@ -3444,7 +3612,10 @@ namespace Server.Mobiles
             {
                 return true;
             }
-	        if (!from.InRange(Location, 2)) return base.OnDragDrop(from, dropped);
+
+	        if (!from.InRange(Location, 2))
+                return base.OnDragDrop(from, dropped);
+
 	        bool gainedPath = false;
 
 	        if (dropped.HonestyOwner == this)
@@ -3941,8 +4112,18 @@ namespace Server.Mobiles
             {
                 if (PetTrainingHelper.Enabled && ControlSlotsMin == 0 && ControlSlotsMax == 0)
                 {
+                    m_iControlSlots = value;
+
                     CalculateSlots(value);
-                    m_iControlSlots = ControlSlotsMin;
+
+                    if (m_iControlSlots != ControlSlotsMin)
+                    {
+                        m_iControlSlots = ControlSlotsMin;
+                    }
+                    else if (m_iControlSlots > ControlSlotsMax)
+                    {
+                        m_iControlSlots = ControlSlotsMax;
+                    }
                 }
                 else
                 {
@@ -3952,10 +4133,10 @@ namespace Server.Mobiles
         }
 
         [CommandProperty(AccessLevel.Administrator)]
-        public int ControlSlotsMax { get; private set; }
+        public int ControlSlotsMax { get; set; }
 
         [CommandProperty(AccessLevel.Administrator)]
-        public int ControlSlotsMin { get; private set; }
+        public int ControlSlotsMin { get; set; }
 
         public virtual bool NoHouseRestrictions { get { return false; } }
         public virtual bool IsHouseSummonable { get { return false; } }
@@ -3965,6 +4146,7 @@ namespace Server.Mobiles
         public virtual int Wool { get { return 0; } }
 
         public virtual int Fur { get { return 0; } }
+        public virtual FurType FurType { get { return FurType.Green; } }
 
         public virtual MeatType MeatType { get { return MeatType.Ribs; } }
         public virtual int Meat { get { return 0; } }
@@ -4089,17 +4271,19 @@ namespace Server.Mobiles
             if (profile == null || !profile.HasAbility(MagicalAbility.Poisoning) || current >= 4)
                 return HitPoison;
 
-            int level = 0;
+            int level = 1;
             double total = Skills[SkillName.Poisoning].Value;
 
             // natural poisoner retains their poison level. Added spell school is capped at level 2.
             if (total >= 100)
-                level = 3;
+                level = 4;
             else if (total > 85)
-                level = 2;
+                level = 3;
             else if (total > 65)
+                level = 2;
+            else if (total > 35)
                 level = 1;
-
+                
             return Poison.GetPoison(Math.Max(current, level));
         }
 
@@ -4220,6 +4404,7 @@ namespace Server.Mobiles
             int iCount = 0;
 
             IPooledEnumerable eable = GetMobilesInRange(iRange);
+
             foreach (Mobile m in eable)
             {
                 if (m is BaseCreature)
@@ -4266,12 +4451,14 @@ namespace Server.Mobiles
 
                 Owner.From.TargetLocked = true;
                 AnimalTaming.DisableMessage = true;
+                AnimalTaming.DeferredTarget = false;
 
-                if (Owner.From.UseSkill(SkillName.AnimalTaming))
+                if (Owner.From.UseSkill(SkillName.AnimalTaming) && Owner.From.Target != null)
                 {
                     Owner.From.Target.Invoke(Owner.From, m_Mobile);
                 }
 
+                AnimalTaming.DeferredTarget = true;
                 AnimalTaming.DisableMessage = false;
                 Owner.From.TargetLocked = false;
             }
@@ -4593,8 +4780,8 @@ namespace Server.Mobiles
 
                     if (aggressor is PlayerMobile || (aggressor is BaseCreature && !((BaseCreature)aggressor).IsMonster))
                     {
-                        BuffInfo.AddBuff(ControlMaster, new BuffInfo(BuffIcon.HeatOfBattleStatus, 1153801, 1153827, AttackMessage.CombatHeatDelay, ControlMaster, true));
-                        BuffInfo.AddBuff(aggressor, new BuffInfo(BuffIcon.HeatOfBattleStatus, 1153801, 1153827, AttackMessage.CombatHeatDelay, aggressor, true));
+                        BuffInfo.AddBuff(ControlMaster, new BuffInfo(BuffIcon.HeatOfBattleStatus, 1153801, 1153827, Aggression.CombatHeatDelay, ControlMaster, true));
+                        BuffInfo.AddBuff(aggressor, new BuffInfo(BuffIcon.HeatOfBattleStatus, 1153801, 1153827, Aggression.CombatHeatDelay, aggressor, true));
                     }
                 }
             }
@@ -4897,11 +5084,10 @@ namespace Server.Mobiles
                             break;
                     }
                 }
-
-
             }
 
             PlaySound(GetIdleSound());
+
             return true; // entered idle state
         }
 
@@ -5282,6 +5468,7 @@ namespace Server.Mobiles
         public void SetResistance(ResistanceType type, int min, int max)
         {
             int val = min == max ? min : Utility.RandomMinMax(min, max);
+
             SetAverage(min, max, val);
 
             switch (type)
@@ -5455,7 +5642,7 @@ namespace Server.Mobiles
 
         public virtual void GenerateLoot(bool spawning)
         {
-            if (m_NoLootOnDeath)
+            if (m_NoLootOnDeath || m_Allured)
                 return;
 
             m_Spawning = spawning;
@@ -5971,11 +6158,11 @@ namespace Server.Mobiles
             {
                 if (treasureLevel >= 0)
                 {
-                    if (m_Paragon && XmlParagon.GetChestChance(this) > Utility.RandomDouble())
-                    {
-                        XmlParagon.AddChest(this, treasureLevel);
-                    }
-                    else if (/*(Map == Map.Felucca || Map == Map.Trammel) &&*/TreasureMapChance >= Utility.RandomDouble())
+					if (m_Paragon && Paragon.ChestChance > Utility.RandomDouble())
+					{
+						PackItem( new ParagonChest( this.Name, treasureLevel ) );
+					}
+                    else if (TreasureMapChance >= Utility.RandomDouble())
                     {
                         Map map = Map;
 
@@ -6258,21 +6445,28 @@ namespace Server.Mobiles
                 int topDamage = rights[0].m_Damage;
                 int minDamage;
 
-                if (hitsMax >= 3000)
+                if (Core.SA)
                 {
-                    minDamage = topDamage / 16;
-                }
-                else if (hitsMax >= 1000)
-                {
-                    minDamage = topDamage / 8;
-                }
-                else if (hitsMax >= 200)
-                {
-                    minDamage = topDamage / 4;
+                    minDamage = (int)((double)topDamage * 0.06);
                 }
                 else
                 {
-                    minDamage = topDamage / 2;
+                    if (hitsMax >= 3000)
+                    {
+                        minDamage = topDamage / 16;
+                    }
+                    else if (hitsMax >= 1000)
+                    {
+                        minDamage = topDamage / 8;
+                    }
+                    else if (hitsMax >= 200)
+                    {
+                        minDamage = topDamage / 4;
+                    }
+                    else
+                    {
+                        minDamage = topDamage / 2;
+                    }
                 }
 
                 for (int i = 0; i < rights.Count; ++i)
@@ -6291,7 +6485,19 @@ namespace Server.Mobiles
         private bool m_Allured;
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public bool Allured { get { return m_Allured; } set { m_Allured = value; } }
+        public bool Allured 
+        { 
+            get { return m_Allured; } 
+            set 
+            { 
+                m_Allured = value;
+
+                if (value && Backpack != null)
+                {
+                    ColUtility.SafeDelete(Backpack.Items);
+                }
+            }
+        }
 
         public virtual bool GivesMLMinorArtifact { get { return false; } }
         #endregion
@@ -6313,9 +6519,9 @@ namespace Server.Mobiles
 
         public virtual void OnKilledBy(Mobile mob)
         {
-            if (m_Paragon && XmlParagon.CheckArtifactChance(mob, this))
+            if (m_Paragon && Paragon.CheckArtifactChance(mob, this))
             {
-                XmlParagon.GiveArtifactTo(mob, this);
+                Paragon.GiveArtifactTo(mob);
             }
 
             EventSink.InvokeOnKilledBy(new OnKilledByEventArgs(this, mob));
@@ -6396,6 +6602,8 @@ namespace Server.Mobiles
             }
             else
             {
+                LootingRights = null;
+
                 if (!Summoned && !m_NoKillAwards)
                 {
                     int totalFame = Fame / 100;
@@ -6472,7 +6680,6 @@ namespace Server.Mobiles
                                 fame.Add(totalFame);
                                 karma.Add(totalKarma);
                             }
-
                         }
 
                         if (HumilityVirtue.IsInHunt(ds.m_Mobile) && Karma < 0)
@@ -6536,22 +6743,79 @@ namespace Server.Mobiles
 
                 EventSink.InvokeCreatureDeath(e);
 
-                if (e.ClearCorpse)
+                if (!c.Deleted)
                 {
-                    var i = c.Items.Count;
+                    int i;
+
+                    if (e.ClearCorpse)
+                    {
+                        i = c.Items.Count;
+
+                        while (--i >= 0)
+                        {
+                            if (i >= c.Items.Count)
+                            {
+                                continue;
+                            }
+
+                            var o = c.Items[i];
+
+                            if (o != null && !o.Deleted)
+                            {
+                                o.Delete();
+                            }
+                        }
+                    }
+
+                    i = e.ForcedLoot.Count;
 
                     while (--i >= 0)
                     {
-                        if (i < c.Items.Count)
+                        if (i >= e.ForcedLoot.Count)
                         {
-                            c.Items[i].Delete();
+                            continue;
+                        }
+
+                        var o = e.ForcedLoot[i];
+
+                        if (o != null && !o.Deleted)
+                        {
+                            c.DropItem(o);
                         }
                     }
+
+                    e.ClearLoot(false);
+                }
+                else
+                {
+                    var i = e.ForcedLoot.Count;
+
+                    while (--i >= 0)
+                    {
+                        if (i >= e.ForcedLoot.Count)
+                        {
+                            continue;
+                        }
+
+                        var o = e.ForcedLoot[i];
+
+                        if (o != null && !o.Deleted)
+                        {
+                            o.Delete();
+                        }
+                    }
+
+                    e.ClearLoot(true);
                 }
 
                 base.OnDeath(c);
 
-                if (DeleteCorpseOnDeath)
+                if (e.PreventDefault)
+                {
+                    return;
+                }
+
+                if (DeleteCorpseOnDeath && !e.PreventDelete)
                 {
                     c.Delete();
                 }
@@ -6572,8 +6836,15 @@ namespace Server.Mobiles
 
         public virtual TimeSpan ReacquireDelay { get { return TimeSpan.FromSeconds(10.0); } }
         public virtual bool ReacquireOnMovement { get { return false; } }
-        public virtual bool AcquireOnApproach { get { return m_Paragon; } }
-        public virtual int AcquireOnApproachRange { get { return 10; } }
+
+        public virtual bool AcquireOnApproach { get { return m_Paragon || ApproachWait; } }
+        public virtual int AcquireOnApproachRange { get { return ApproachRange; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool ApproachWait { get; set; }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int ApproachRange { get; set; }
 
         public override void OnDelete()
         {
@@ -6704,6 +6975,10 @@ namespace Server.Mobiles
 
         public virtual void OnAfterTame(Mobile tamer)
         {
+            if (StatLossAfterTame && Owners.Count == 0)
+            {
+                AnimalTaming.ScaleStats(this, 0.5);
+            }
         }
 
         public override void OnRegionChange(Region Old, Region New)
@@ -6722,7 +6997,7 @@ namespace Server.Mobiles
             }
         }
 
-        public double GetDispelDifficulty()
+        public virtual double GetDispelDifficulty()
         {
             double dif = DispelDifficulty;
             if (SummonMaster != null)
@@ -7037,7 +7312,7 @@ namespace Server.Mobiles
 
                     toHeal *= HealScalar;
 
-                    patient.Heal((int)toHeal);
+                    patient.Heal((int)toHeal, this);
 
                     CheckSkill(SkillName.Healing, 0.0, Skills[SkillName.Healing].Cap);
                     CheckSkill(SkillName.Anatomy, 0.0, Skills[SkillName.Anatomy].Cap);
@@ -7076,6 +7351,47 @@ namespace Server.Mobiles
         }
         #endregion
 
+        public override void OnHeal(ref int amount, Mobile from)
+        {
+            base.OnHeal(ref amount, from);
+
+            if (from == null)
+                return;
+
+            if (Core.SA && amount > 0 && from != null && from != this)
+            {
+                for (int i = Aggressed.Count - 1; i >= 0; i--)
+                {
+                    var info = Aggressed[i];
+
+                    if (info.Defender.InRange(Location, Core.GlobalMaxUpdateRange) && info.Defender.DamageEntries.Any(de => de.Damager == this))
+                    {
+                        info.Defender.RegisterDamage(amount, from);
+                    }
+
+                    if (info.Defender.Player && from.CanBeHarmful(info.Defender))
+                    {
+                        from.DoHarmful(info.Defender, true);
+                    }
+                }
+
+                for (int i = Aggressors.Count - 1; i >= 0; i--)
+                {
+                    var info = Aggressors[i];
+
+                    if (info.Attacker.InRange(Location, Core.GlobalMaxUpdateRange) && info.Attacker.DamageEntries.Any(de => de.Damager == this))
+                    {
+                        info.Attacker.RegisterDamage(amount, from);
+                    }
+
+                    if (info.Attacker.Player && from.CanBeHarmful(info.Attacker))
+                    {
+                        from.DoHarmful(info.Attacker, true);
+                    }
+                }
+            }
+        }
+
         #region Damaging Aura
         private long m_NextAura;
 
@@ -7106,21 +7422,7 @@ namespace Server.Mobiles
                 return;
             }
 
-            var list = new List<Mobile>();
-
-            IPooledEnumerable eable = GetMobilesInRange(AuraRange);
-
-            foreach (Mobile m in eable)
-            {
-                if (m != this && SpellHelper.ValidIndirectTarget(this, m) && CanBeHarmful(m, false) && (!Core.AOS || InLOS(m)))
-                {
-                    list.Add(m);
-                }
-            }
-
-            eable.Free();
-
-            foreach (Mobile m in list)
+            foreach (Mobile m in SpellHelper.AcquireIndirectTargets(this, this, Map, AuraRange).OfType<Mobile>())
             {
                 int damage = GetAuraDamage(m);
 
@@ -7140,8 +7442,6 @@ namespace Server.Mobiles
                 m.RevealingAction();
                 AuraEffect(m);
             }
-
-            ColUtility.Free(list);
         }
 
         public virtual void AuraEffect(Mobile m)
@@ -7299,6 +7599,7 @@ namespace Server.Mobiles
         public virtual bool DoPeace()
         {
             Mobile target = GetBardTarget();
+
             if (target == null || !target.InLOS(this) || !InRange(target.Location, BaseInstrument.GetBardRange(this, SkillName.Peacemaking)) || CheckInstrument() == null)
                 return false;
 
@@ -7369,6 +7670,8 @@ namespace Server.Mobiles
                     inst.SuccessSound = PlayInstrumentSound ? 0x58B : 0;
                     inst.FailureSound = PlayInstrumentSound ? 0x58C : 0;
                     inst.Movable = false;
+                    inst.Quality = ItemQuality.Exceptional;
+
                     PackItem(inst);
                 }
             }
@@ -7534,6 +7837,7 @@ namespace Server.Mobiles
             }
 
             eable.Free();
+
             Mobile mob = null;
 
             if (list.Count > 0)
@@ -7547,7 +7851,7 @@ namespace Server.Mobiles
         #region Detect Hidden
         private long _NextDetect;
 
-        public virtual bool CanDetectHidden { get { return Skills[SkillName.DetectHidden].Value > 0; } }
+        public virtual bool CanDetectHidden { get { return Controlled && Skills.DetectHidden.Value > 0; } }
 
         public virtual int FindPlayerDelayBase { get { return (15000 / Int); } }
         public virtual int FindPlayerDelayMax { get { return 60; } }
@@ -7555,7 +7859,6 @@ namespace Server.Mobiles
         public virtual int FindPlayerDelayHigh { get { return 10; } }
         public virtual int FindPlayerDelayLow { get { return 9; } }
 
-        // This does NOT actually use the skill. Just uses the skill values for a distinct ability.
         public virtual void TryFindPlayer()
         {
             if (Deleted || Map == null)
@@ -7599,7 +7902,7 @@ namespace Server.Mobiles
                 return;
             }
 
-            if (PetTrainingHelper.Enabled && !Summoned && _Profile != null)
+            if (!Summoned && _Profile != null)
             {
                 SpecialAbility.CheckThinkTrigger(this);
                 AreaEffect.CheckThinkTrigger(this);
@@ -7874,6 +8177,7 @@ namespace Server.Mobiles
             var move = new List<Mobile>();
 
             IPooledEnumerable eable = master.GetMobilesInRange(3);
+
             foreach (Mobile m in eable)
             {
                 if (m is BaseCreature)
@@ -8092,11 +8396,8 @@ namespace Server.Mobiles
                     if (m is BaseMount && ((BaseMount)m).Rider != null)
                     {
                         ((BaseCreature)m).OwnerAbandonTime = DateTime.MinValue;
-
-                        return;
                     }
-
-                    if (m is BaseCreature)
+                    else if (m is BaseCreature)
                     {
                         BaseCreature c = (BaseCreature)m;
 
@@ -8176,8 +8477,12 @@ namespace Server.Mobiles
                 c.BondingBegin = DateTime.MinValue;
                 c.OwnerAbandonTime = DateTime.MinValue;
                 c.ControlTarget = null;
-                //c.ControlOrder = OrderType.Release;
-                c.AIObject.DoOrderRelease();
+
+                if (c.AIObject != null)
+                {
+                    c.AIObject.DoOrderRelease();
+                }
+
                 // this will prevent no release of creatures left alone with AI disabled (and consequent bug of Followers)
                 c.DropBackpack();
                 c.RemoveOnSave = true;

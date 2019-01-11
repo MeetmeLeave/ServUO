@@ -26,7 +26,7 @@ namespace Server.Spells.Mysticism
 
         public override void OnCast()
         {
-            Caster.Target = new InternalTarget(this, TargetFlags.Harmful);
+            Caster.Target = new InternalTarget(this);
         }
 
         public void OnTarget(object o)
@@ -141,7 +141,7 @@ namespace Server.Spells.Mysticism
             damage *= (100 + sdiBonus);
             damage /= 100;
 
-            SpellHelper.Damage(null, TimeSpan.Zero, from, caster, damage, 0, 0, 0, 0, 0, Server.Misc.DFAlgorithm.Standard, 100, 0);
+            SpellHelper.Damage(null, TimeSpan.Zero, from, caster, damage, 0, 0, 0, 0, 0, DFAlgorithm.Standard, 100, 0);
         }
 
         public static void RemoveFromList(Mobile from)
@@ -175,13 +175,13 @@ namespace Server.Spells.Mysticism
         {
             public SpellPlagueSpell Owner { get; set; }
 
-            public InternalTarget(SpellPlagueSpell owner, TargetFlags flags)
-                : this(owner, false, flags)
+            public InternalTarget(SpellPlagueSpell owner)
+                : this(owner, false)
             {
             }
 
-            public InternalTarget(SpellPlagueSpell owner, bool allowland, TargetFlags flags)
-                : base(12, allowland, flags)
+            public InternalTarget(SpellPlagueSpell owner, bool allowland)
+                : base(12, allowland, TargetFlags.Harmful)
             {
                 Owner = owner;
             }

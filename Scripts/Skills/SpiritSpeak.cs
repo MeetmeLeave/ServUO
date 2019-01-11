@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - SpiritSpeak.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -94,7 +88,7 @@ namespace Server.SkillHandlers
         {
             if (_Table == null || !_Table.ContainsKey(m))
             {
-                m.SendSpeedControl(SpeedControlType.NoMove);
+                m.Freeze(TimeSpan.FromSeconds(1));
 
                 m.Animate(AnimationType.Spell, 1);
                 m.PublicOverheadMessage(MessageType.Regular, 0x3B2, 1062074, "", false); // Anh Mi Sah Ko
@@ -168,7 +162,7 @@ namespace Server.SkillHandlers
 
                 foreach (Item item in Caster.GetItemsInRange(3))
                 {
-                    if (item is Corpse && !((Corpse)item).Channeled)
+                    if (item is Corpse && !((Corpse)item).Channeled && !((Corpse)item).Animated)
                     {
                         toChannel = (Corpse)item;
                         break;

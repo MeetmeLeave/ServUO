@@ -21,7 +21,7 @@ namespace Server.Spells.SkillMasteries
             );
 
         public override double RequiredSkill { get { return 90; } }
-        public override int RequiredMana { get { return 40; } }
+        public override int RequiredMana { get { return 50; } }
 
         public override SkillName CastSkill { get { return SkillName.Chivalry; } }
         public override SkillName DamageSkill { get { return SkillName.Chivalry; } }
@@ -92,6 +92,16 @@ namespace Server.Spells.SkillMasteries
 
                     Caster.MovingParticles(m, 0x9BB5, 7, 0, false, true, 9502, 4019, 0x160);
                     Caster.PlaySound(0x5CE);
+
+                    if (m is Mobile)
+                    {
+                        damage *= GetDamageScalar((Mobile)m);
+                    }
+
+                    int sdiBonus = SpellHelper.GetSpellDamageBonus(Caster, m, CastSkill, m is Mobile ? Caster.Player && ((Mobile)m).Player : false);
+
+                    damage *= (100 + sdiBonus);
+                    damage /= 100;
 
                     SpellHelper.Damage(this, target, damage, 0, 0, 0, 0, 100);
 

@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - TreasureMap.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -170,6 +164,9 @@ namespace Server.Items
 
         private static Point2D[] m_Locations;
         private static Point2D[] m_HavenLocations;
+
+        public static Point2D[] Locations { get { return m_Locations; } }
+        public static Point2D[] HavenLocations { get { return m_Locations; } }
 
         private int m_Level;
         private bool m_Completed;
@@ -539,7 +536,11 @@ namespace Server.Items
             }
         }
 
-        public virtual void OnMapComplete(TreasureMapChest chest)
+        public virtual void OnMapComplete(Mobile from, TreasureMapChest chest)
+        {
+        }
+
+        public virtual void OnChestOpened(Mobile from, TreasureMapChest chest)
         {
         }
 
@@ -698,7 +699,7 @@ namespace Server.Items
             return false;
         }
 
-        public void OnBeginDig(Mobile from)
+        public virtual void OnBeginDig(Mobile from)
         {
             if (m_Completed)
             {
@@ -751,7 +752,7 @@ namespace Server.Items
             }
         }
 
-        public void Decode(Mobile from)
+        public virtual void Decode(Mobile from)
         {
             if (m_Completed || m_Decoder != null)
             {
@@ -772,12 +773,17 @@ namespace Server.Items
 
                 if (from.Skills[SkillName.Cartography].Value < minSkill)
                 {
-                    from.SendLocalizedMessage(503013); // The map is too difficult to attempt to decode.
+                    if (m_Level == 1)
+                    {
+                        from.CheckSkill(SkillName.Cartography, 0, minSkill);
+                    }
+                    else
+                    {
+                        from.SendLocalizedMessage(503013); // The map is too difficult to attempt to decode.
+                    }
                 }
 
-                double maxSkill = minSkill + 60.0;
-
-                if (!from.CheckSkill(SkillName.Cartography, minSkill, maxSkill))
+                if (!from.CheckSkill(SkillName.Cartography, minSkill - 10, minSkill + 30))
                 {
                     from.LocalOverheadMessage(MessageType.Regular, 0x3B2, 503018); // You fail to make anything of the map.
                     return;
@@ -1060,29 +1066,30 @@ namespace Server.Items
             switch (m_Level)
             {
                 case 1:
-                    return -3.0;
+                    return Core.AOS ? 27.0 : -3.0;
                 case 2:
-                    return 41.0;
+                    return Core.AOS ? 71.0 : 41.0;
                 case 3:
-                    return 51.0;
+                    return Core.AOS ? 81.0 : 51.0;
                 case 4:
-                    return 61.0;
+                    return Core.AOS ? 91.0 : 61.0;
                 case 5:
-                    return 70.0;
                 case 6:
-                    return 70.0;
+                    return Core.AOS ? 100.0 : 70.0;
+                case 7:
+                    return 100.0;
 
                 default:
                     return 0.0;
             }
         }
 
-        private bool HasRequiredSkill(Mobile from)
+        protected virtual bool HasRequiredSkill(Mobile from)
         {
             return (from.Skills[SkillName.Cartography].Value >= GetMinSkillLevel());
         }
 
-        private class DigTarget : Target
+        protected class DigTarget : Target
         {
             private readonly TreasureMap m_Map;
 
@@ -1362,10 +1369,11 @@ namespace Server.Items
                     m_From.EndAction(typeof(TreasureMap));
 
                     m_Chest.Temporary = false;
+                    m_Chest.TreasureMap = m_TreasureMap;
                     m_TreasureMap.Completed = true;
                     m_TreasureMap.CompletedBy = m_From;
 
-                    m_TreasureMap.OnMapComplete(m_Chest);
+                    m_TreasureMap.OnMapComplete(m_From, m_Chest);
 
                     int spawns;
                     switch (m_TreasureMap.Level)

@@ -155,7 +155,7 @@ namespace Server.Items
         }
     }
 
-    public class BouraPelt : Item
+    public class BouraPelt : Item, ICommodity
     {
         [Constructable]
         public BouraPelt()
@@ -175,6 +175,9 @@ namespace Server.Items
             : base(serial)
         {
         }
+
+        TextDefinition ICommodity.Description { get { return LabelNumber; } }
+        bool ICommodity.IsDeedable { get { return true; } }
 
         public override int LabelNumber
         {
@@ -313,7 +316,7 @@ namespace Server.Items
                 return 1031698;
             }
         }// Enchaned Essence
-		int ICommodity.DescriptionNumber
+		TextDefinition ICommodity.Description
         {
             get
             {
@@ -438,7 +441,7 @@ namespace Server.Items
         }
     }
 
-    public class LuckyCoin : Item
+    public class LuckyCoin : Item, ICommodity
     {
         [Constructable]
         public LuckyCoin()
@@ -460,6 +463,9 @@ namespace Server.Items
             : base(serial)
         {
         }
+
+        TextDefinition ICommodity.Description { get { return LabelNumber; } }
+        bool ICommodity.IsDeedable { get { return true; } }
 
         public override int LabelNumber
         {
@@ -545,7 +551,7 @@ namespace Server.Items
                 return 1031697;
             }
         }// Magical Residue
-		int ICommodity.DescriptionNumber
+		TextDefinition ICommodity.Description
         {
             get
             {
@@ -641,7 +647,7 @@ namespace Server.Items
                 return 1031699;
             }
         }// Relic Fragment
-		int ICommodity.DescriptionNumber
+		TextDefinition ICommodity.Description
         {
             get
             {
@@ -770,7 +776,7 @@ namespace Server.Items
 
         [Constructable]
         public TatteredAncientScroll(int amount)
-            : base(0x1437)
+            : base(0x1700)
         {
         }
 
@@ -810,7 +816,7 @@ namespace Server.Items
         }
     }
 
-    public class UndamagedIronBeetleScale : Item
+    public class UndamagedIronBeetleScale : Item, ICommodity
     {
         [Constructable]
         public UndamagedIronBeetleScale()
@@ -830,6 +836,9 @@ namespace Server.Items
             : base(serial)
         {
         }
+
+        TextDefinition ICommodity.Description { get { return LabelNumber; } }
+        bool ICommodity.IsDeedable { get { return true; } }
 
         public override int LabelNumber
         {

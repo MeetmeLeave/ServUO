@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - Ethereals.cs
-// **********
-#endregion
-
 #region References
 using System;
 
@@ -389,7 +383,7 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write(5); // version
+            writer.Write(7); // version
 
             writer.Write(m_Transparent);
 
@@ -414,6 +408,8 @@ namespace Server.Mobiles
 
             switch (version)
             {
+                case 7:
+                case 6:
                 case 5:
                     m_Transparent = reader.ReadBool();
                     m_TransparentMountedID = reader.ReadInt();
@@ -513,7 +509,7 @@ namespace Server.Mobiles
             ProcessDelta();
         }
 
-        public void OnRiderDamaged(int amount, Mobile from, bool willKill)
+        public virtual void OnRiderDamaged(Mobile from, ref int amount, bool willKill)
         { }
 
         private class EtherealSpell : Spell

@@ -24,18 +24,17 @@ namespace Server.Engines.Shadowguard
 
         public virtual bool CanSummon { get { return Hits <= HitsMax - (HitsMax / 4); } }
 
-		private Type[] _ArtifactTypes = new Type[]
-		{
-			typeof(AnonsBoots),					typeof(AnonsBootsGargoyle),			typeof(AnonsSpellbook),			typeof(BalakaisShamanStaff),
-			typeof(BalakaisShamanStaffGargoyle),typeof(EnchantressCameo),			typeof(GrugorsShield),			typeof(GrugorsShieldGargoyle),
-			typeof(HalawasHuntingBow),			typeof(HalawasHuntingBowGargoyle),	typeof(HawkwindsRobe),			typeof(JumusSacredHide),
-			typeof(JumusSacredHideGargoyle), 	typeof(JuonarsGrimoire), 			typeof(LereisHuntingSpear), 	typeof(LereisHuntingSpearGargoyle), 
-			typeof(MinaxsSandles), 				typeof(MinaxsSandlesGargoyle), 		typeof(OzymandiasObi),
-			typeof(OzymandiasObiGargoyle), 		typeof(ShantysWaders), 				typeof(ShantysWadersGargoyle), 	typeof(TotemOfTheTribe),
-			typeof(WamapsBoneEarrings), 		typeof(WamapsBoneEarringsGargoyle), typeof(UnstableTimeRift),       typeof(MocapotlsObsidianSword)
-		};
-		
-		public ShadowguardBoss(AIType ai) : base(ai, FightMode.Closest, 10, 1, .15, .3)
+        private Type[] _ArtifactTypes = new Type[]
+        {
+            typeof(AnonsBoots),                 typeof(AnonsSpellbook),         typeof(BalakaisShamanStaff),
+            typeof(EnchantressCameo),           typeof(GrugorsShield),          typeof(WamapsBoneEarrings),
+            typeof(HalawasHuntingBow),          typeof(HawkwindsRobe),          typeof(JumusSacredHide),
+            typeof(JuonarsGrimoire),            typeof(LereisHuntingSpear),     typeof(UnstableTimeRift),
+            typeof(MinaxsSandles),              typeof(MocapotlsObsidianSword), typeof(OzymandiasObi),
+            typeof(ShantysWaders),              typeof(TotemOfTheTribe),        typeof(BalakaisShamanStaffGargoyle)
+        };
+
+        public ShadowguardBoss(AIType ai) : base(ai, FightMode.Closest, 10, 1, .15, .3)
 		{
 			_NextSummon = DateTime.UtcNow;
 			
@@ -76,7 +75,7 @@ namespace Server.Engines.Shadowguard
 
 		public override void OnGotMeleeAttack(Mobile m)
 		{
-            if (CanSummon && !(m is GreaterDragon) && _NextSummon < DateTime.UtcNow)
+            if (m is PlayerMobile && CanSummon && !(m is GreaterDragon) && _NextSummon < DateTime.UtcNow)
 				Summon();
 				
 			base.OnGotMeleeAttack(m);
@@ -84,7 +83,7 @@ namespace Server.Engines.Shadowguard
 		
 		public override void OnDamagedBySpell(Mobile m)
 		{
-            if (CanSummon && !(m is GreaterDragon) && _NextSummon < DateTime.UtcNow)
+            if (m is PlayerMobile && CanSummon && !(m is GreaterDragon) && _NextSummon < DateTime.UtcNow)
 				Summon();
 				
 			base.OnDamagedBySpell(m);
@@ -372,8 +371,8 @@ namespace Server.Engines.Shadowguard
         [Constructable]
 		public Anon() : base(AIType.AI_Mage)
 		{
-			Name = "anon";
-			Title = "the mage";
+			Name = "Anon";
+			Title = "the Mage";
 
             Body = 0x190;
             HairItemID = 0x203C;
@@ -620,7 +619,7 @@ namespace Server.Engines.Shadowguard
         public Juonar()
             : base(AIType.AI_NecroMage)
         {
-            Name = "juo'nar";
+            Name = "Juo'nar";
             Body = 78;
             BaseSoundID = 412;
             Hue = 2951;
@@ -721,9 +720,9 @@ namespace Server.Engines.Shadowguard
         [Constructable]
 		public Virtuebane() : base(AIType.AI_Mage)
 		{
-			Name = "virtuebane";
+			Name = "Virtuebane";
 		
-			Body = 1071; // Giant minotaur?
+			Body = 1071; 
             SpeechHue = 452;
 
 			SetStam(500, 650);
@@ -937,8 +936,8 @@ namespace Server.Engines.Shadowguard
 		[Constructable]
 		public Ozymandias() : base(AIType.AI_Melee)
 		{
-			Name = "ozymandias";
-			Title = "the lord of castle barataria";
+			Name = "Ozymandias";
+			Title = "the Lord of Castle Barataria";
 
             Hue = Race.RandomSkinHue();
             Body = 0x190;

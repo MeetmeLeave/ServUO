@@ -33,6 +33,9 @@ namespace Server.Engines.CityLoyalty
         public string CustomTitle { get; set; }
 
         [CommandProperty(AccessLevel.GameMaster)]
+        public bool ShowGainMessage { get; set; }
+
+        [CommandProperty(AccessLevel.GameMaster)]
         public LoyaltyRating LoyaltyRating
         {
             get
@@ -48,9 +51,6 @@ namespace Server.Engines.CityLoyalty
         { 
             get 
             {
-                if (_Utilizing && TradeDealExpires < DateTime.UtcNow)
-                    UtilizingTradeDeal = false;
-
                 return _Utilizing;
             } 
             set 
@@ -65,6 +65,8 @@ namespace Server.Engines.CityLoyalty
                 {
                     BuffInfo.RemoveBuff(Player, BuffIcon.CityTradeDeal);
                     Player.SendLocalizedMessage(1154074); // The benefit from your City's Trade Deal has expired! Visit the City Stone to reclaim it.
+
+                    Player.Delta(MobileDelta.WeaponDamage);
                 }
 
                 _Utilizing = value;
@@ -80,6 +82,7 @@ namespace Server.Engines.CityLoyalty
 		public CityLoyaltyEntry(PlayerMobile pm, City city) : base(pm)
 		{
             City = city;
+            ShowGainMessage = true;
 		}
 		
 		public void DeclareCitizenship()
@@ -114,16 +117,21 @@ namespace Server.Engines.CityLoyalty
             }
 		}
 
-        public bool CheckTradeDeal()
+        public void CheckTradeDeal()
         {
-            return UtilizingTradeDeal;
+            if (TradeDealExpired)
+            {
+                UtilizingTradeDeal = false;
+            }
         }
 		
 		public override void Serialize(GenericWriter writer)
 		{
 			base.Serialize(writer);
-			writer.Write(0);
-			
+			writer.Write(1);
+
+            writer.Write(ShowGainMessage);
+
 			writer.Write(Love);
 			writer.Write(Hate);
 			writer.Write(Neutrality);
@@ -140,18 +148,33 @@ namespace Server.Engines.CityLoyalty
 		{
 			base.Deserialize(reader);
 			int version = reader.ReadInt();
-			
-			Love = reader.ReadInt();
-			Hate = reader.ReadInt();
-			Neutrality = reader.ReadInt();
 
-			Titles = (CityTitle)reader.ReadInt();
-            TradeDealExpires = reader.ReadDateTime();
-            _Utilizing = reader.ReadBool();
-            CustomTitle = reader.ReadString();
-
-            CheckTradeDeal();
-			IsCitizen = reader.ReadBool();
+            switch (version)
+            {
+                case 1:
+                    ShowGainMessage = reader.ReadBool();
+                    goto case 0;
+                case 0:
+					{
+		                if (version == 0)
+		                {
+		                    ShowGainMessage = true;
+		                }
+		
+		                Love = reader.ReadInt();
+		                Hate = reader.ReadInt();
+		                Neutrality = reader.ReadInt();
+		
+		                Titles = (CityTitle)reader.ReadInt();
+		                TradeDealExpires = reader.ReadDateTime();
+		                _Utilizing = reader.ReadBool();
+		                CustomTitle = reader.ReadString();
+		
+		                CheckTradeDeal();
+		                IsCitizen = reader.ReadBool();
+					}
+                    break;
+            }
 		}
 	}
 }

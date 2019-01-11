@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - BaseExplosionPotion.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections;
@@ -167,6 +161,7 @@ namespace Server.Items
 			IPooledEnumerable eable = LeveledExplosion
 										  ? map.GetObjectsInRange(loc, ExplosionRange)
 										  : (IPooledEnumerable)map.GetMobilesInRange(loc, ExplosionRange);
+
 			ArrayList toExplode = new ArrayList();
 
 			int toDamage = 0;
@@ -225,6 +220,8 @@ namespace Server.Items
 					pot.Explode(from, false, pot.GetWorldLocation(), pot.Map);
 				}
 			}
+
+            toExplode.Clear();
 		}
 
 		private void Detonate_OnTick(object state)

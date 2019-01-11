@@ -372,8 +372,16 @@ namespace Server.Engines.Quests
 
                         if (escort != null)
                         {
-                            AddHtmlLocalized(98, offset, 50, 16, 1072206, 0x15F90, false, false); // Escort to
-                            AddHtmlObject(153, offset, 200, 16, escort.Region.Name, White, false, false);
+                            AddHtmlLocalized(98, offset, 312, 16, 1072206, 0x15F90, false, false); // Escort to
+
+                            if (escort.Label == 0)
+                            {
+                                AddHtmlObject(173, offset, 200, 16, escort.Region.Name, White, false, false);
+                            }
+                            else
+                            {
+                                AddHtmlLocalized(173, offset, 200, 16, escort.Label, 0xFFFFFF, false, false);
+                            }
 
                             offset += 16;
 
@@ -412,6 +420,17 @@ namespace Server.Engines.Quests
                             offset += 16;
                             AddHtmlLocalized(103, offset, 120, 16, 1062379, 0x15F90, false, false); // Est. time remaining:
                             AddLabel(223, offset, 0x481, FormatSeconds(obj.Seconds)); // %est. time remaining%
+                        }
+                    }
+                    else if (objective.ObjectiveDescription != null)
+                    {
+                        if (objective.ObjectiveDescription is int)
+                        {
+                            AddHtmlLocalized(98, offset, 310, 300, (int)objective.ObjectiveDescription, 0x15F90, false, false);
+                        }
+                        else if (objective.ObjectiveDescription is string)
+                        {
+                            AddHtmlObject(98, offset, 310, 300, (string)objective.ObjectiveDescription, LightGreen, false, false);
                         }
                     }
                 }

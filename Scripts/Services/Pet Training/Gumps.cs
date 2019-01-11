@@ -24,6 +24,7 @@ namespace Server.Mobiles
         public override void AddGumpLayout()
         {
             var profile = PetTrainingHelper.GetAbilityProfile(Creature);
+            var trainProfile = PetTrainingHelper.GetTrainingProfile(Creature, true);
 
             AddPage(0);
             AddBackground(0, 24, 310, 325, 0x24A4);
@@ -34,11 +35,10 @@ namespace Server.Mobiles
             AddImage(40, 62, 0x82B);
             AddImage(40, 258, 0x82B);
 
-            if (Creature.Controlled && Creature.ControlMaster == User)
+            if (Creature.Controlled && Creature.ControlMaster == User && PetTrainingHelper.CanControl(User, Creature, trainProfile))
             {
                 AddImage(28, 272, 0x826);
 
-                var trainProfile = PetTrainingHelper.GetTrainingProfile(Creature, true);
                 var def = PetTrainingHelper.GetTrainingDefinition(Creature);
 
                 if (trainProfile.HasBegunTraining && def != null && def.Class != Class.Untrainable)
@@ -358,47 +358,63 @@ namespace Server.Mobiles
                     }
 
                     y += 18;
-                }
-
-                y = 92;
+                }                
 
                 if (profile.Advancements != null)
                 {
                     AddButton(240, 328, 0x15E1, 0x15E5, 0, GumpButtonType.Page, 9);
                     AddButton(217, 328, 0x15E3, 0x15E7, 0, GumpButtonType.Page, 7);
 
-                    AddPage(9);
+                    int advpage = AdvPage(profile);
 
-                    AddImage(28, 76, 0x826);
+                    int profileadvcount = profile.Advancements.Count - 1;
 
-                    AddHtmlLocalized(47, 74, 160, 18, 1157505, 0xC8, false, false); // Pet Advancements
+                    int idx = 0;
 
-                    for (int i = profile.Advancements.Count - 1; i >= 0; i--)
+                    for (int p = 1; p <= advpage; p++)
                     {
-                        var loc = PetTrainingHelper.GetLocalization(profile.Advancements[i]);
-                        bool skill = profile.Advancements[i] is SkillName; // ? "#228B22" : "#FF4500";
+                        y = 92;
 
-                        if (loc[0].Number > 0)
+                        AddPage(8 + p);
+
+                        AddImage(28, 76, 0x826);
+
+                        AddHtmlLocalized(47, 74, 160, 18, 1157505, 0xC8, false, false); // Pet Advancements
+                        
+                        for (int i = profileadvcount; i >= 0; i--)
                         {
-                            AddHtmlLocalized(53, y, 180, 18, loc[0], C32216(skill ? 0x008000 : 0xFF4500), false, false);
-
-                            if (skill)
+                            if (++idx > 9)
                             {
-                                AddHtml(180, y, 75, 18, String.Format("<div align=right>{0:F1}</div>", Creature.Skills[(SkillName)profile.Advancements[i]].Cap), false, false);
+                                profileadvcount -= idx;
+                                idx = 0;
+                                break;
                             }
-                        }
-                        else if (loc[0].String != null)
-                        {
-                            AddHtml(53, y, 180, 18, Color(skill ? "#008000" : "#FF4500", loc[0]), false, false);
+
+                            var loc = PetTrainingHelper.GetLocalization(profile.Advancements[i]);
+                            bool skill = profile.Advancements[i] is SkillName; // ? "#228B22" : "#FF4500";
+
+                            if (loc[0].Number > 0)
+                            {
+                                AddHtmlLocalized(53, y, 180, 18, loc[0], C32216(skill ? 0x008000 : 0xFF4500), false, false);
+
+                                if (skill)
+                                {
+                                    AddHtml(180, y, 75, 18, String.Format("<div align=right>{0:F1}</div>", Creature.Skills[(SkillName)profile.Advancements[i]].Cap), false, false);
+                                }
+                            }
+                            else if (loc[0].String != null)
+                            {
+                                AddHtml(53, y, 180, 18, Color(skill ? "#008000" : "#FF4500", loc[0]), false, false);
+                            }
+
+                            AddTooltip(PetTrainingHelper.GetCategoryLocalization(profile.Advancements[i]));
+
+                            y += 18;
                         }
 
-                        AddTooltip(PetTrainingHelper.GetCategoryLocalization(profile.Advancements[i]));
-
-                        y += 18;
+                        AddButton(240, 328, 0x15E1, 0x15E5, 0, GumpButtonType.Page, advpage == p ? 1 : 9 + p);
+                        AddButton(217, 328, 0x15E3, 0x15E7, 0, GumpButtonType.Page, 7 + p);
                     }
-
-                    AddButton(240, 328, 0x15E1, 0x15E5, 0, GumpButtonType.Page, 1);
-                    AddButton(217, 328, 0x15E3, 0x15E7, 0, GumpButtonType.Page, 8);
                 }
                 else
                 {
@@ -498,12 +514,30 @@ namespace Server.Mobiles
             }
         }
 
+        public int AdvPage(AbilityProfile profile)
+        {
+            int advcount = profile.Advancements.Count;
+
+            int advpage = 0;
+
+            if (advcount % 9 == 0)
+            {
+                advpage = advcount / 9;
+            }
+            else
+            {
+                advpage = advcount / 9 + 1;
+            }
+
+            return advpage;
+        }
+
         public int Pages(AbilityProfile profile)
         {
             if (profile == null || profile.Advancements == null || profile.Advancements.Count == 0)
-                return 8;
+                return 8;            
 
-            return 9;
+            return 8 + AdvPage(profile);
         }
 
         private static string FormatSkill(BaseCreature c, SkillName name)
@@ -660,11 +694,18 @@ namespace Server.Mobiles
             AddHtmlLocalized(0, 12, 454, 16, CenterLoc, String.Format("#{0}", _Title.ToString()), 0xF424E5, false, false);
             AddHtmlLocalized(55, 65, 344, 80, _Body, C32216(0x8B0000), false, false);
 
-            AddButton(70, 150, 0x9CC8, 0x9CC7, 1, GumpButtonType.Reply, 0);
-            AddButton(235, 150, 0x9CC8, 0x9CC7, 2, GumpButtonType.Reply, 0);
+            AddECHandleInput();
 
+            AddButton(70, 150, 0x9CC8, 0x9CC7, 1, GumpButtonType.Reply, 0);
             AddHtml(70, 153, 126, 16, Center("Yes"), false, false);
+
+            AddECHandleInput();
+            AddECHandleInput();
+
+            AddButton(235, 150, 0x9CC8, 0x9CC7, 2, GumpButtonType.Reply, 0);
             AddHtml(235, 153, 126, 16, Center("Cancel"), false, false);
+
+            AddECHandleInput();
         }
 
         public override void OnResponse(RelayInfo info)
@@ -733,11 +774,19 @@ namespace Server.Mobiles
             AddHtmlLocalized(35, 63, 220, 20, 1044010, 0, false, false); // <CENTER>CATEGORIES</CENTER>
             AddHtmlLocalized(265, 63, 270, 20, 1044011, 0, false, false); // <CENTER>SELECTIONS</CENTER>
 
+            AddECHandleInput();
+
             AddButton(35, 490, 0x9CC8, 0x9CC7, 0, GumpButtonType.Reply, 0);
             AddHtml(35, 493, 126, 20, Center("CANCEL"), false, false);
 
+            AddECHandleInput();
+            AddECHandleInput();
+
             AddButton(220, 490, 0x9CC8, 0x9CC7, 1, GumpButtonType.Reply, 0);
             AddHtml(220, 493, 126, 20, Center("PLAN"), false, false);
+
+            AddECHandleInput();
+            AddECHandleInput();
 
             AddButton(410, 490, 0x9CC8, 0x9CC7, 2, GumpButtonType.Reply, 0);
             AddHtml(410, 493, 126, 20, Center("INFO"), false, false);
@@ -1588,7 +1637,7 @@ namespace Server.Mobiles
                     {
                         User.SendLocalizedMessage(1157501); // Your pet looks to have already completed that training. 
                     }
-                    else
+                    else if (PetTrainingHelper.CanControl(User, Creature, profile))
                     {
                         BaseGump.SendGump(new PetTrainingConfirmGump(User, 1157502, TrainingPoint.TrainPoint is MagicalAbility ? 1157566 : 1157503, () =>
                             {
