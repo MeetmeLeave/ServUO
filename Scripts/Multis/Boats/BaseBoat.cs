@@ -1182,7 +1182,7 @@ namespace Server.Multis
 
                     int keyword = e.Keywords[i];
 
-                    if ((keyword >= 0x42 && keyword <= 0x6B) || keyword == 0x28 || keyword == 0xF)  // TG - added 0x28
+                    if ((keyword >= 0x42 && keyword <= 0x6B) || keyword == 0xF)
                     {
                         switch (keyword)
                         {
@@ -1221,14 +1221,14 @@ namespace Server.Multis
                             case 0x67: StartTurn(-4, true); break; // turn around, come about
                             case 0x68: StartMove(Forward, true); break;
                             case 0x69: StopMove(true); break;
-                            //case 0x6A: LowerAnchor( true ); break;
-                            //case 0x6B: RaiseAnchor( true ); break;
+                            case 0x6A: if(!Core.HS) LowerAnchor( true ); break;
+                            case 0x6B: if(!Core.HS) RaiseAnchor( true ); break;
                             case 0x60: GiveNavPoint(); break; // nav
                             case 0x61: NextNavPoint = 0; StartCourse(false, true); break; // start
                             case 0x62: StartCourse(false, true); break; // continue
                             case 0x63: StartCourse(e.Speech, false, true); break; // goto*
                             case 0x64: StartCourse(e.Speech, true, true); break; // single*
-                            case 0xF: TryTrack(from, e.Speech); break;
+                            case 0xF: if(Core.HS) TryTrack(from, e.Speech); break;
                         }
 
                         e.Handled = true;
@@ -1259,16 +1259,29 @@ namespace Server.Multis
                 return false;
             }
 
-            if (m_MoveTimer != null && Order != BoatOrder.Move)
+            bool resume = false;
+            bool fast = false;
+            var resumeDir = Direction.North;
+
+            if (m_MoveTimer != null)
             {
+                if (Order == BoatOrder.Move)
+                {
+                    resume = true;
+                    resumeDir = m_Moving;
+                    fast = m_ClientSpeed == 0x4;
+                }
+
                 m_MoveTimer.Stop();
                 m_MoveTimer = null;
             }
 
             if (m_TurnTimer != null)
+            {
                 m_TurnTimer.Stop();
+            }
 
-            m_TurnTimer = new TurnTimer(this, offset);
+            m_TurnTimer = new TurnTimer(this, offset, resume, resumeDir, fast);
             m_TurnTimer.Start();
 
             if (message && TillerMan != null)
@@ -1278,6 +1291,11 @@ namespace Server.Multis
         }
 
         public bool Turn(int offset, bool message)
+        {
+            return Turn(offset, message, false, Direction.North, false);
+        }
+
+        public bool Turn(int offset, bool message, bool resume, Direction resumeDir, bool fast)
         {
             if (m_TurnTimer != null)
             {
@@ -1289,18 +1307,23 @@ namespace Server.Multis
                 return false;
 
             Direction d = IsPiloted ? (Direction)offset : (Direction)(((int)m_Facing + offset) & 0x7);
+            bool success = false;
 
             if (SetFacing(d))
             {
-                return true;
+                success = true;
             }
-            else
+            else if (message)
             {
-                if (message)
-                    TillerManSay(501423); // Ar, can't turn sir.
-
-                return false;
+                TillerManSay(501423); // Ar, can't turn sir.
             }
+
+            if (resume && !IsPiloted)
+            {
+                StartMove(resumeDir, fast);
+            }
+
+            return success;
         }
 
         private class TurnTimer : Timer
@@ -1308,11 +1331,19 @@ namespace Server.Multis
             private BaseBoat m_Boat;
             private int m_Offset;
 
-            public TurnTimer(BaseBoat boat, int offset)
+            private bool m_Resume;
+            private Direction m_ResumeDirection;
+            private bool m_Fast;
+
+            public TurnTimer(BaseBoat boat, int offset, bool resume, Direction resumeDir, bool fast)
                 : base(TimeSpan.FromSeconds(0.5))
             {
                 m_Boat = boat;
                 m_Offset = offset;
+
+                m_Resume = resume;
+                m_ResumeDirection = resumeDir;
+                m_Fast = fast;
 
                 Priority = TimerPriority.TenMS;
             }
@@ -1320,8 +1351,48 @@ namespace Server.Multis
             protected override void OnTick()
             {
                 if (!m_Boat.Deleted)
-                    m_Boat.Turn(m_Offset, true);
+                    m_Boat.Turn(m_Offset, true, m_Resume, m_ResumeDirection, m_Fast);
             }
+        }
+
+        public bool LowerAnchor(bool message)
+        {
+            if (CheckDecay())
+                return false;
+
+            if (m_Anchored)
+            {
+                TillerManSay(501445); // Ar, the anchor was already dropped sir.
+
+                return false;
+            }
+
+            StopMove(false);
+
+            m_Anchored = true;
+
+            TillerManSay(501444); // Ar, anchor dropped sir.
+
+            return true;
+        }
+
+        public bool RaiseAnchor(bool message)
+        {
+            if (CheckDecay())
+                return false;
+
+            if (!m_Anchored)
+            {
+                TillerManSay(501447); // Ar, the anchor has not been dropped sir.
+
+                return false;
+            }
+
+            m_Anchored = false;
+
+            TillerManSay(501446); // Ar, anchor raised sir.
+
+            return true;
         }
 
         public bool StartMove(Direction dir, bool fast)
@@ -1603,6 +1674,11 @@ namespace Server.Multis
             return Boats.Any(boat => boat.Owner == from && !boat.Deleted && boat.Map != Map.Internal && !(boat is RowBoat));
         }
 
+        public static BaseBoat GetBoat(Mobile from)
+        {
+            return Boats.FirstOrDefault(boat => boat.Owner == from && !boat.Deleted && boat.Map != Map.Internal && !(boat is RowBoat));
+        }
+
         public static bool IsValidLocation(Point3D p, Map map)
         {
             Rectangle2D[] wrap = GetWrapFor(map);
@@ -1719,9 +1795,13 @@ namespace Server.Multis
                 }
 
                 if (dir == Left || dir == BackwardLeft || dir == Backward)
-                    return Turn(-2, true);
+                {
+                    return Turn(-2, true, true, dir, true);
+                }
                 else if (dir == Right || dir == BackwardRight)
-                    return Turn(2, true);
+                {
+                    return Turn(2, true, true, dir, true);
+                }
 
                 speed = Math.Min(Speed, maxSpeed);
                 clientSpeed = 0x4;
@@ -1822,7 +1902,9 @@ namespace Server.Multis
                 NoMoveHS = true;
 
                 foreach (var e in toMove)
+                {
                     e.NoMoveHS = true;
+                }
 
                 // packet created
                 MoveBoatHS smooth = new MoveBoatHS(this, d, clientSpeed, xOffset, yOffset);
@@ -2188,7 +2270,7 @@ namespace Server.Multis
             return false;
         }
 
-        public IEnumerable<IEntity> GetEntitiesOnBoard()
+        public virtual IEnumerable<IEntity> GetEntitiesOnBoard()
         {
             Map map = Map;
 

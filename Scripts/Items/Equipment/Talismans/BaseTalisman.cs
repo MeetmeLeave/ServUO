@@ -552,6 +552,8 @@ namespace Server.Items
             talisman.m_AosSkillBonuses = new AosSkillBonuses(newItem, m_AosSkillBonuses);
             talisman.m_SAAbsorptionAttributes = new SAAbsorptionAttributes(newItem, m_SAAbsorptionAttributes);
             talisman.m_NegativeAttributes = new NegativeAttributes(newItem, m_NegativeAttributes);
+
+            base.OnAfterDuped(newItem);
         }
 
         public override bool CanEquip(Mobile from)
@@ -751,6 +753,9 @@ namespace Server.Items
 
         public override void AddWeightProperty(ObjectPropertyList list)
         {
+            if (OwnerName != null)
+                list.Add(1153213, OwnerName);
+
             base.AddWeightProperty(list);
 
             if (IsVvVItem)
@@ -760,11 +765,6 @@ namespace Server.Items
         public override void GetProperties(ObjectPropertyList list)
         {
             base.GetProperties(list);
-
-            if (OwnerName != null)
-            {
-                list.Add(1153213, OwnerName);
-            }
 
             #region Factions
             FactionEquipment.AddFactionProperties(this, list);

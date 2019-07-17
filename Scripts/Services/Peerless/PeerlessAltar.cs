@@ -67,7 +67,7 @@ namespace Server.Items
         [CommandProperty(AccessLevel.GameMaster)]
         public Mobile Owner { get; set; }
 
-        public Mobile Summoner
+        /*public Mobile Summoner
         {
             get
             {
@@ -76,7 +76,7 @@ namespace Server.Items
 
                 return Fighters[0];
             }
-        }
+        }*/
 
         public PeerlessAltar(int itemID)
             : base(itemID)
@@ -154,6 +154,7 @@ namespace Server.Items
                     KeyStopTimer();
 
                     from.SendLocalizedMessage(1072678); // You have awakened the master of this realm. You need to hurry to defeat it in time!
+                    BeginSequence(from);
 
                     for (int k = 0; k < KeyCount; k++)
                     {
@@ -345,19 +346,6 @@ namespace Server.Items
             }
         }
 
-        private int toConfirm;
-
-        public virtual void AddFighter(Mobile fighter, bool confirmed)
-        {
-            if (confirmed)
-                AddFighter(fighter);
-
-            toConfirm -= 1;
-
-            if (toConfirm == 0)
-                BeginSequence(Summoner);
-        }
-
         public virtual void AddFighter(Mobile fighter)
         {
             if (!Fighters.Contains(fighter))
@@ -370,50 +358,23 @@ namespace Server.Items
 
             if (party != null)
             {
-                toConfirm = 0;
-
-                foreach (PartyMemberInfo info in party.Members)
+                foreach (var m in party.Members.Select(info => info.Mobile))
                 {
-                    Mobile m = info.Mobile;
-
                     if (m.InRange(from.Location, 25) && CanEnter(m))
                     {
-                        if (m == from)
-                            AddFighter(from);
-                        else
-                        {
-                            toConfirm += 1;
-
-                            m.CloseGump(typeof(ConfirmEntranceGump));
-                            m.SendGump(new ConfirmEntranceGump(this, from));
-                        }
+                        m.SendGump(new ConfirmEntranceGump(this, from));
                     }
                 }
-
-                if (toConfirm == 0)
-                    BeginSequence(Summoner);
             }
             else
             {
-                AddFighter(from);
-                BeginSequence(Summoner);
+                from.SendGump(new ConfirmEntranceGump(this, from));
             }
-        }        
+        }
 
         public virtual void BeginSequence(Mobile from)
         {
             SpawnBoss();
-
-            // teleport fighters
-            Fighters.ForEach(x =>
-            {
-                int counter = 0;
-
-                if (x.InRange(from.Location, 15) && CanEnter(x))
-                {
-                    Timer.DelayCall(TimeSpan.FromSeconds(counter++), () => { Enter(x); });
-                }
-            });
         }
 
         public virtual void SpawnBoss()
@@ -458,6 +419,8 @@ namespace Server.Items
                 fighter.FixedParticles(0x376A, 9, 32, 0x13AF, EffectLayer.Waist);
                 fighter.PlaySound(0x1FE);
                 fighter.MoveToWorld(TeleportDest, Map);
+
+                AddFighter(fighter);
             }
         }
 
@@ -491,16 +454,18 @@ namespace Server.Items
             }
 
             // teleport party to exit if not already there
-            Fighters.ForEach(x => Exit(x));
+            if (Fighters != null)
+            {
+                Fighters.ForEach(x => Exit(x));
+                Fighters.Clear();
+            }
 
             // delete master keys
-            MasterKeys.ForEach(x => x.Delete());
-
             if (MasterKeys != null)
+            {
+                MasterKeys.ForEach(x => x.Delete());
                 MasterKeys.Clear();
-
-            if (Fighters != null)
-                Fighters.Clear();
+            }
 
             // delete any remaining helpers
             CleanupHelpers();
@@ -513,6 +478,9 @@ namespace Server.Items
 
         public virtual void Exit(Mobile fighter)
         {
+            if (fighter == null)
+                return;
+
             // teleport fighter
             if (fighter.NetState == null && MobileIsInBossArea(fighter.LogoutLocation))
             {
@@ -533,7 +501,8 @@ namespace Server.Items
             // teleport his pets
             if (fighter is PlayerMobile)
             {
-                foreach (var pet in ((PlayerMobile)fighter).AllFollowers.OfType<BaseCreature>().Where(pet => (pet.Alive || pet.IsBonded) &&
+                foreach (var pet in ((PlayerMobile)fighter).AllFollowers.OfType<BaseCreature>().Where(pet => pet != null &&
+                                                                                                             (pet.Alive || pet.IsBonded) &&
                                                                                                              pet.Map != Map.Internal &&
                                                                                                              MobileIsInBossArea(pet)))
                 {

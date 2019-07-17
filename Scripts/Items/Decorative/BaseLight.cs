@@ -6,7 +6,7 @@ using Server.ContextMenus;
 
 namespace Server.Items
 {
-    public abstract class BaseLight : Item, ICraftable, IResource, ISecurable
+    public abstract class BaseLight : Item, ICraftable, IResource, IQuality, ISecurable
     {
         public static readonly bool Burnout = false;
         private Timer m_Timer;
@@ -224,10 +224,8 @@ namespace Server.Items
             }
         }
 
-        public override void GetProperties(ObjectPropertyList list)
+        public override void AddCraftedProperties(ObjectPropertyList list)
         {
-            base.GetProperties(list);
-
             if (_PlayerConstructed && _Crafter != null)
             {
                 list.Add(1050043, _Crafter.TitleName); // crafted by ~1_NAME~
